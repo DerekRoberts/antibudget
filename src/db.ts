@@ -34,9 +34,9 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_posted_at ON transactions (posted_at);
 `;
 
-export type JusttrackDb = DatabaseSync;
+export type AntibudgetDb = DatabaseSync;
 
-export function openDatabase(dbPath: string): JusttrackDb {
+export function openDatabase(dbPath: string): AntibudgetDb {
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = DELETE;");
   db.exec("PRAGMA foreign_keys = ON;");
@@ -50,7 +50,7 @@ export interface AccountRow {
 }
 
 export function upsertAccount(
-  db: JusttrackDb,
+  db: AntibudgetDb,
   acctId: string,
   ledgerBalanceCents: number | null,
 ): AccountRow {
@@ -85,7 +85,7 @@ export interface InsertTransactionInput {
 
 /** Insert one transaction; returns true if a new row was inserted. */
 export function insertTransactionIgnore(
-  db: JusttrackDb,
+  db: AntibudgetDb,
   tx: InsertTransactionInput,
 ): boolean {
   const stmt = db.prepare(`
@@ -104,7 +104,7 @@ export function insertTransactionIgnore(
   return result.changes > 0;
 }
 
-export function countTransactions(db: JusttrackDb): number {
+export function countTransactions(db: AntibudgetDb): number {
   const row = db.prepare("SELECT COUNT(*) AS c FROM transactions").get() as unknown as {
     c: number;
   };
@@ -120,7 +120,7 @@ export function documentFitidHashFallback(): string {
   return "fitid_hash reserved for FITID rotation; M1 dedup uses (account_id, fitid) only.";
 }
 
-export function runInTransaction(db: JusttrackDb, fn: () => void): void {
+export function runInTransaction(db: AntibudgetDb, fn: () => void): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     fn();

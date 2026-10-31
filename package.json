@@ -1,5 +1,5 @@
 {
-  "name": "justtrack",
+  "name": "antibudget",
   "version": "0.1.0",
   "description": "Local-first personal cashflow tracker (OFX ingestion, not a budget app)",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=22.5.0"
   },
   "bin": {
-    "justtrack": "./dist/src/cli.js"
+    "antibudget": "./dist/src/cli.js"
   },
   "files": [
     "dist"

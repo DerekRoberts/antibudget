@@ -6,11 +6,11 @@ Local-first cashflow tracking from recurring OFX/QFX dumps. Milestone 1 covers s
 
 ## Data directory layout
 
-Resolved by `src/config.ts` (default under OS user data; override `JUSTTRACK_HOME`):
+Resolved by `src/config.ts` (default under OS user data; override `ANTIBUDGET_HOME`):
 
 ```
-<JUSTTRACK_HOME>/
-  justtrack.db          # SQLite (journal_mode=DELETE)
+<ANTIBUDGET_HOME>/
+  antibudget.db         # SQLite (journal_mode=DELETE)
   inbox/                # Drop new .ofx / .qfx here
   archive/              # Processed exports moved here
   rules.yaml            # Reserved for M2 (not implemented in M1)
@@ -43,7 +43,7 @@ Resolved by `src/config.ts` (default under OS user data; override `JUSTTRACK_HOM
 | `db.ts` | Schema migration/init, typed helpers |
 | `ofx.ts` | OFX v1 SGML + v2 XML parsing |
 | `ingest.ts` | Parse files, insert rows, archive inputs |
-| `cli.ts` | `justtrack ingest [path]` |
+| `cli.ts` | `antibudget ingest [path]` |
 
 ## Milestone map
 

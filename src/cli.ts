@@ -7,10 +7,10 @@ import { resolvePaths } from "./config.js";
 import { ingestOfxPaths } from "./ingest.js";
 
 function printUsage(): void {
-  console.error(`Usage: justtrack ingest [file-or-directory]
+  console.error(`Usage: antibudget ingest [file-or-directory]
 
 Environment:
-  JUSTTRACK_HOME   Override data directory (default: OS user data path)
+  ANTIBUDGET_HOME   Override data directory (default: OS user data path)
 `);
 }
 

@@ -47,7 +47,7 @@ test("parseOfxContent rejects multiple ACCTID values", () => {
 });
 
 test("ingest is idempotent when the same OFX is processed twice", () => {
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "justtrack-test-"));
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-test-"));
   const paths = resolvePaths({ home: tmpHome, createDirs: true });
   const inboxFile = path.join(paths.inbox, "sample.ofx");
   fs.copyFileSync(fixturePath, inboxFile);

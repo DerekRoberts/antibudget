@@ -2,7 +2,7 @@
 
 ## Project overview
 
-`justtrack` is a local-first, non-opinionated personal cashflow tracker. It ingests OFX/QFX exports regularly, deduplicates transactions, and (in later milestones) supports categorization and reflection views. It is **not** a zero-based budget app like YNAB.
+`antibudget` is a local-first, non-opinionated personal cashflow tracker. It ingests OFX/QFX exports regularly, deduplicates transactions, and (in later milestones) supports categorization and reflection views. It is **not** a zero-based budget app like YNAB.
 
 ## Tech stack and constraints
 
@@ -10,8 +10,8 @@
 - **Database:** Built-in `node:sqlite` (`DatabaseSync`) only. Do **not** add `sqlite3` or `better-sqlite3`.
 - **SQLite:** Open every connection with `PRAGMA journal_mode = DELETE;` and `PRAGMA foreign_keys = ON;` (single-file DB safe for cloud sync folders).
 - **Money:** Store amounts as **integer cents** (`INTEGER`), never `REAL`.
-- **Data directory:** Default OS user data path (`~/.local/share/justtrack` on Linux; macOS/Windows equivalents). Override with `JUSTTRACK_HOME` for symlinked Drive layouts.
-- **CLI / package name:** `justtrack`.
+- **Data directory:** Default OS user data path (`~/.local/share/antibudget` on Linux; macOS/Windows equivalents). Override with `ANTIBUDGET_HOME` for symlinked Drive layouts.
+- **CLI / package name:** `antibudget`.
 
 ## Core invariants
 

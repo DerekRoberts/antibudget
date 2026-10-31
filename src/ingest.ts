@@ -1,14 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { resolvePaths, type JusttrackPaths } from "./config.js";
+import { resolvePaths, type AntibudgetPaths } from "./config.js";
 import {
   countTransactions,
   insertTransactionIgnore,
   openDatabase,
   runInTransaction,
   upsertAccount,
-  type JusttrackDb,
+  type AntibudgetDb,
 } from "./db.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
 
@@ -19,8 +19,8 @@ export interface IngestResult {
 }
 
 export interface IngestOptions {
-  paths?: JusttrackPaths;
-  db?: JusttrackDb;
+  paths?: AntibudgetPaths;
+  db?: AntibudgetDb;
   /** When set, ingest only this file or directory instead of inbox. */
   sourcePath?: string;
 }
@@ -72,7 +72,7 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
   }
 }
 
-function resolveIngestFiles(paths: JusttrackPaths, sourcePath?: string): string[] {
+function resolveIngestFiles(paths: AntibudgetPaths, sourcePath?: string): string[] {
   if (!sourcePath) {
     return listOfxFiles(paths.inbox);
   }
@@ -84,7 +84,7 @@ function resolveIngestFiles(paths: JusttrackPaths, sourcePath?: string): string[
   return [resolved];
 }
 
-function ingestParsedStatement(db: JusttrackDb, parsed: ParsedOfxStatement): void {
+function ingestParsedStatement(db: AntibudgetDb, parsed: ParsedOfxStatement): void {
   runInTransaction(db, () => {
     const account = upsertAccount(
       db,

@@ -1,6 +1,6 @@
-# justtrack
+# antibudget
 
-Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicate transactions in SQLite, and (in later milestones) categorize and reflect on spending. This is **not** a zero-based budget app.
+Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicate transactions in SQLite, and (in later milestones) categorize and reflect on spending. **Not** a zero-based budget app — more “where did the money go?” than “give every dollar a job.”
 
 ## Requirements
 
@@ -13,7 +13,7 @@ Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicat
 npm install
 npm test
 npm run build
-npx justtrack ingest   # reads ~/.local/share/justtrack/inbox (or JUSTTRACK_HOME)
+npx antibudget ingest   # reads ~/.local/share/antibudget/inbox (or ANTIBUDGET_HOME)
 ```
 
 Copy synthetic exports from `fixtures/` into your inbox for a dry run. **Never commit real `.ofx`, `.qfx`, or `.db` files** — see `.gitignore`.
@@ -22,20 +22,20 @@ Copy synthetic exports from `fixtures/` into your inbox for a dry run. **Never c
 
 | Platform | Default path |
 |----------|----------------|
-| Linux | `~/.local/share/justtrack` |
-| macOS | `~/Library/Application Support/justtrack` |
-| Windows | `%LOCALAPPDATA%\justtrack` |
+| Linux | `~/.local/share/antibudget` |
+| macOS | `~/Library/Application Support/antibudget` |
+| Windows | `%LOCALAPPDATA%\antibudget` |
 
-Override with **`JUSTTRACK_HOME`** (useful for a symlink into Google Drive):
+Override with **`ANTIBUDGET_HOME`** (useful for a symlink into Google Drive):
 
 ```bash
-export JUSTTRACK_HOME="$HOME/Drive/justtrack-data"
-mkdir -p "$JUSTTRACK_HOME/inbox"
-cp fixtures/sample.ofx "$JUSTTRACK_HOME/inbox/"
-npx justtrack ingest
+export ANTIBUDGET_HOME="$HOME/Drive/antibudget-data"
+mkdir -p "$ANTIBUDGET_HOME/inbox"
+cp fixtures/sample.ofx "$ANTIBUDGET_HOME/inbox/"
+npx antibudget ingest
 ```
 
-Layout: `inbox/` (new exports) → ingest → `archive/` + `justtrack.db`. A `rules.yaml` path is reserved for Milestone 2.
+Layout: `inbox/` (new exports) → ingest → `archive/` + `antibudget.db`. A `rules.yaml` path is reserved for Milestone 2.
 
 ## Privacy
 

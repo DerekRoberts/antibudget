@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export interface JusttrackPaths {
+export interface AntibudgetPaths {
   home: string;
   inbox: string;
   archive: string;
@@ -10,10 +10,10 @@ export interface JusttrackPaths {
   rulesPath: string;
 }
 
-const APP_DIR_NAME = "justtrack";
+const APP_DIR_NAME = "antibudget";
 
 function defaultHomeDir(): string {
-  const override = process.env.JUSTTRACK_HOME?.trim();
+  const override = process.env.ANTIBUDGET_HOME?.trim();
   if (override) {
     return path.resolve(override);
   }
@@ -34,13 +34,13 @@ function defaultHomeDir(): string {
 export function resolvePaths(options?: {
   home?: string;
   createDirs?: boolean;
-}): JusttrackPaths {
+}): AntibudgetPaths {
   const home = options?.home ? path.resolve(options.home) : defaultHomeDir();
-  const paths: JusttrackPaths = {
+  const paths: AntibudgetPaths = {
     home,
     inbox: path.join(home, "inbox"),
     archive: path.join(home, "archive"),
-    dbPath: path.join(home, "justtrack.db"),
+    dbPath: path.join(home, "antibudget.db"),
     rulesPath: path.join(home, "rules.yaml"),
   };
 
