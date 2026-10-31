@@ -35,7 +35,15 @@ cp fixtures/sample.ofx "$ANTIBUDGET_HOME/inbox/"
 npx antibudget ingest
 ```
 
-Layout: `inbox/` (new exports) → ingest → `archive/` + `antibudget.db`. A `rules.yaml` path is reserved for Milestone 2.
+Layout: `inbox/` → ingest → `archive/` + `antibudget.db`. Copy `fixtures/rules.example.yaml` to your data dir as `rules.yaml` (or run `npx antibudget categorize --init-rules`).
+
+```bash
+npx antibudget categorize              # apply rules to existing transactions
+npx antibudget set-category ACCT FITID CategoryName
+npx antibudget report monthly --month 2026-01
+npx antibudget report cashflow
+npx antibudget report uncategorized
+```
 
 ## Privacy
 

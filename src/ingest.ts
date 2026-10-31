@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { categorizeTransactions } from "./categorize.js";
 import { resolvePaths, type AntibudgetPaths } from "./config.js";
 import {
   countTransactions,
@@ -58,6 +59,10 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       transactionsSkipped += parsed.transactions.length - inserted;
 
       archiveFile(filePath, paths.archive);
+    }
+
+    if (files.length > 0) {
+      categorizeTransactions({ paths, db });
     }
 
     return {
