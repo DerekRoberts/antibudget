@@ -1,0 +1,25 @@
+{
+  "name": "antibudget",
+  "version": "0.1.0",
+  "description": "Local-first personal cashflow tracker (OFX ingestion, not a budget app)",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "bin": {
+    "antibudget": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --experimental-sqlite --test \"dist/test/**/*.test.js\"",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  }
+}
