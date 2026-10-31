@@ -32,7 +32,7 @@ Override with **`JUSTTRACK_HOME`** (useful for a symlink into Google Drive):
 export JUSTTRACK_HOME="$HOME/Drive/justtrack-data"
 mkdir -p "$JUSTTRACK_HOME/inbox"
 cp fixtures/sample.ofx "$JUSTTRACK_HOME/inbox/"
-justtrack ingest
+npx justtrack ingest
 ```
 
 Layout: `inbox/` (new exports) → ingest → `archive/` + `justtrack.db`. A `rules.yaml` path is reserved for Milestone 2.

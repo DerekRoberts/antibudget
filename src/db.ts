@@ -119,3 +119,14 @@ export function countTransactions(db: JusttrackDb): number {
 export function documentFitidHashFallback(): string {
   return "fitid_hash reserved for FITID rotation; M1 dedup uses (account_id, fitid) only.";
 }
+
+export function runInTransaction(db: JusttrackDb, fn: () => void): void {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    fn();
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}

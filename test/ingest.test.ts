@@ -7,7 +7,7 @@ import test from "node:test";
 import { resolvePaths } from "../src/config.js";
 import { countTransactions, openDatabase } from "../src/db.js";
 import { ingestOfxPaths, listOfxFiles } from "../src/ingest.js";
-import { parseOfxFile } from "../src/ofx.js";
+import { parseOfxContent, parseOfxFile, ofxAmountToCents } from "../src/ofx.js";
 
 const repoRoot = path.join(import.meta.dirname, "..", "..");
 const fixturePath = path.join(repoRoot, "fixtures", "sample.ofx");
@@ -29,6 +29,21 @@ test("parseOfxFile handles OFX 2 XML exports", () => {
   assert.equal(parsed.account.ledgerBalanceCents, -31_550);
   assert.equal(parsed.transactions.length, 1);
   assert.equal(parsed.transactions[0].payee, "COFFEE SHOP");
+});
+
+test("ofxAmountToCents treats decimal comma as cents separator", () => {
+  assert.equal(ofxAmountToCents("12,50"), 1250);
+  assert.equal(ofxAmountToCents("-12,50"), -1250);
+  assert.equal(ofxAmountToCents("1.234,56"), 123_456);
+  assert.equal(ofxAmountToCents("1,234.56"), 123_456);
+});
+
+test("parseOfxContent rejects multiple ACCTID values", () => {
+  assert.throws(
+    () =>
+      parseOfxContent(`<OFX><ACCTID>a</ACCTID><ACCTID>b</ACCTID></OFX>`),
+    /multiple ACCTID/,
+  );
 });
 
 test("ingest is idempotent when the same OFX is processed twice", () => {

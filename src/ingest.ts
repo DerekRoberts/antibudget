@@ -6,6 +6,7 @@ import {
   countTransactions,
   insertTransactionIgnore,
   openDatabase,
+  runInTransaction,
   upsertAccount,
   type JusttrackDb,
 } from "./db.js";
@@ -84,29 +85,43 @@ function resolveIngestFiles(paths: JusttrackPaths, sourcePath?: string): string[
 }
 
 function ingestParsedStatement(db: JusttrackDb, parsed: ParsedOfxStatement): void {
-  const account = upsertAccount(
-    db,
-    parsed.account.acctId,
-    parsed.account.ledgerBalanceCents,
-  );
+  runInTransaction(db, () => {
+    const account = upsertAccount(
+      db,
+      parsed.account.acctId,
+      parsed.account.ledgerBalanceCents,
+    );
 
-  for (const tx of parsed.transactions) {
-    insertTransactionIgnore(db, {
-      accountId: account.id,
-      fitid: tx.fitid,
-      amountCents: tx.amountCents,
-      postedAt: tx.postedAt,
-      payee: tx.payee,
-      memo: tx.memo,
-    });
-  }
+    for (const tx of parsed.transactions) {
+      insertTransactionIgnore(db, {
+        accountId: account.id,
+        fitid: tx.fitid,
+        amountCents: tx.amountCents,
+        postedAt: tx.postedAt,
+        payee: tx.payee,
+        memo: tx.memo,
+      });
+    }
+  });
 }
 
 function archiveFile(filePath: string, archiveDir: string): void {
   fs.mkdirSync(archiveDir, { recursive: true });
   const base = path.basename(filePath);
   const dest = uniqueArchivePath(archiveDir, base);
-  fs.renameSync(filePath, dest);
+  try {
+    fs.renameSync(filePath, dest);
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? (error as NodeJS.ErrnoException).code
+        : undefined;
+    if (code !== "EXDEV") {
+      throw error;
+    }
+    fs.copyFileSync(filePath, dest);
+    fs.unlinkSync(filePath);
+  }
 }
 
 function uniqueArchivePath(archiveDir: string, baseName: string): string {

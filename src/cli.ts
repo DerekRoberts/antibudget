@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --experimental-sqlite
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,8 +49,20 @@ async function main(): Promise<void> {
   );
 }
 
-const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) {
+function isCliMain(): boolean {
+  if (!process.argv[1]) {
+    return false;
+  }
+  const modulePath = fileURLToPath(import.meta.url);
+  const entryPath = path.resolve(process.argv[1]);
+  try {
+    return fs.realpathSync(modulePath) === fs.realpathSync(entryPath);
+  } catch {
+    return modulePath === entryPath;
+  }
+}
+
+if (isCliMain()) {
   main().catch((err: unknown) => {
     console.error(err);
     process.exit(1);

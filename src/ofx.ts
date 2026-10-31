@@ -26,15 +26,21 @@ export function parseOfxFile(filePath: string): ParsedOfxStatement {
 
 export function parseOfxContent(raw: string): ParsedOfxStatement {
   const xmlLike = isXmlOfx(raw);
-  const acctId = extractTag(raw, "ACCTID", xmlLike);
-  if (!acctId) {
+  const acctIds = uniqueNonEmpty(extractAllTags(raw, "ACCTID", xmlLike));
+  if (acctIds.length === 0) {
     throw new Error("OFX parse error: missing ACCTID");
   }
+  if (acctIds.length > 1) {
+    throw new Error(
+      `OFX parse error: multiple ACCTID values (${acctIds.join(", ")}); split into one account per file`,
+    );
+  }
+  const acctId = acctIds[0];
 
   let ledgerBalanceCents: number | null = null;
   const balAmt = extractNestedAmount(raw, "LEDGERBAL", "BALAMT", xmlLike);
   if (balAmt !== null) {
-    ledgerBalanceCents = dollarsToCents(balAmt);
+    ledgerBalanceCents = ofxAmountToCents(balAmt);
   }
 
   const transactions: ParsedOfxTransaction[] = [];
@@ -44,13 +50,15 @@ export function parseOfxContent(raw: string): ParsedOfxStatement {
     const trnAmt = extractTag(block, "TRNAMT", xmlLike);
     const dtPosted = extractTag(block, "DTPOSTED", xmlLike);
     if (!fitid || trnAmt === null || !dtPosted) {
-      continue;
+      throw new Error(
+        "OFX parse error: STMTTRN missing required FITID, TRNAMT, or DTPOSTED",
+      );
     }
     const name = extractTag(block, "NAME", xmlLike);
     const memo = extractTag(block, "MEMO", xmlLike);
     transactions.push({
       fitid,
-      amountCents: dollarsToCents(trnAmt),
+      amountCents: ofxAmountToCents(trnAmt),
       postedAt: ofxDateToIso(dtPosted),
       payee: name,
       memo: memo ?? name,
@@ -72,14 +80,30 @@ function isXmlOfx(raw: string): boolean {
 }
 
 function extractTag(content: string, tag: string, xml: boolean): string | null {
+  const all = extractAllTags(content, tag, xml);
+  return all[0] ?? null;
+}
+
+function extractAllTags(content: string, tag: string, xml: boolean): string[] {
+  const values: string[] = [];
   if (xml) {
-    const re = new RegExp(`<${tag}>([^<]*)</${tag}>`, "i");
-    const m = content.match(re);
-    return m ? decodeXmlEntities(m[1].trim()) : null;
+    const re = new RegExp(`<${tag}>([^<]*)</${tag}>`, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      values.push(decodeXmlEntities(m[1].trim()));
+    }
+    return values;
   }
-  const re = new RegExp(`<${tag}>([^\\r\\n<]+)`, "i");
-  const m = content.match(re);
-  return m ? m[1].trim() : null;
+  const re = new RegExp(`<${tag}>([^\\r\\n<]+)`, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    values.push(m[1].trim());
+  }
+  return values;
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  return [...new Set(values.filter((v) => v.length > 0))];
 }
 
 function extractNestedAmount(
@@ -124,13 +148,82 @@ function extractStmtTrnBlocks(content: string, xml: boolean): string[] {
   return blocks;
 }
 
-function dollarsToCents(amount: string): number {
-  const normalized = amount.replace(/,/g, "").trim();
-  const value = Number.parseFloat(normalized);
-  if (Number.isNaN(value)) {
+/** Parse OFX monetary amounts into signed integer cents without floating point. */
+export function ofxAmountToCents(amount: string): number {
+  let s = amount.trim();
+  if (!s) {
     throw new Error(`Invalid TRNAMT/BALAMT: ${amount}`);
   }
-  return Math.round(value * 100);
+
+  let negative = false;
+  if (s.startsWith("-")) {
+    negative = true;
+    s = s.slice(1).trim();
+  } else if (s.startsWith("+")) {
+    s = s.slice(1).trim();
+  }
+
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized: string;
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    if (lastComma > lastDot) {
+      normalized = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalized = s.replace(/,/g, "");
+    }
+  } else if (lastComma !== -1) {
+    const fracLen = s.length - lastComma - 1;
+    normalized = fracLen === 2 ? s.replace(",", ".") : s.replace(/,/g, "");
+  } else if (lastDot !== -1) {
+    const fracLen = s.length - lastDot - 1;
+    if (fracLen === 2 || fracLen === 1) {
+      normalized = s;
+    } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+      normalized = s.replace(/\./g, "");
+    } else {
+      normalized = s;
+    }
+  } else {
+    normalized = s;
+  }
+
+  return decimalStringToCents(normalized, negative, amount);
+}
+
+function decimalStringToCents(normalized: string, negative: boolean, raw: string): number {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized);
+  if (!match) {
+    throw new Error(`Invalid TRNAMT/BALAMT: ${raw}`);
+  }
+
+  const wholePart = match[1];
+  let fracPart = match[2] ?? "";
+  if (fracPart.length > 2) {
+    const roundUp = fracPart[2] >= "5";
+    fracPart = fracPart.slice(0, 2);
+    let whole = BigInt(wholePart);
+    let frac = BigInt((fracPart + "00").slice(0, 2));
+    if (roundUp) {
+      frac += 1n;
+      if (frac >= 100n) {
+        whole += 1n;
+        frac -= 100n;
+      }
+    }
+    const cents = whole * 100n + frac;
+    const signed = negative ? -cents : cents;
+    if (signed < BigInt(Number.MIN_SAFE_INTEGER) || signed > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`Invalid TRNAMT/BALAMT: ${raw}`);
+    }
+    return Number(signed);
+  }
+
+  const fracPadded = (fracPart + "00").slice(0, 2);
+  const cents = BigInt(wholePart) * 100n + BigInt(fracPadded);
+  const signed = negative ? -cents : cents;
+  return Number(signed);
 }
 
 function ofxDateToIso(dtPosted: string): string {
