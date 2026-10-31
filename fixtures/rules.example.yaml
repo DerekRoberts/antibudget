@@ -1,0 +1,22 @@
+# Example antibudget rules (synthetic patterns only — not real finance).
+# Copy to $ANTIBUDGET_HOME/rules.yaml and edit for your payees.
+#
+# First matching rule wins. Rules only update rows where is_manual_override = 0.
+
+rules:
+  - category: Income
+    payee_contains: PAYROLL
+    amount_sign: credit
+
+  - category: Groceries
+    payee_contains: GROCERY
+
+  - category: Shopping
+    payee_regex: (?i)amazon
+
+  - category: Housing
+    payee_contains: RENT
+
+  - category: Transfers
+    payee_contains: CREDIT CARD PAYMENT
+    mark_transfer: true

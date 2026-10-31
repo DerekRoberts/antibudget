@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { categorizeTransactions } from "./categorize.js";
 import { resolvePaths, type AntibudgetPaths } from "./config.js";
 import {
   countTransactions,
@@ -11,6 +12,7 @@ import {
   type AntibudgetDb,
 } from "./db.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
+import { loadRules, type RulesFile } from "./rules.js";
 
 export interface IngestResult {
   filesProcessed: number;
@@ -45,6 +47,9 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
 
   try {
     const files = resolveIngestFiles(paths, options.sourcePath);
+    const rulesFile: RulesFile | undefined = fs.existsSync(paths.rulesPath)
+      ? loadRules(paths)
+      : undefined;
     let transactionsInserted = 0;
     let transactionsSkipped = 0;
 
@@ -58,6 +63,10 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       transactionsSkipped += parsed.transactions.length - inserted;
 
       archiveFile(filePath, paths.archive);
+    }
+
+    if (files.length > 0 && rulesFile) {
+      categorizeTransactions({ paths, db, rules: rulesFile });
     }
 
     return {

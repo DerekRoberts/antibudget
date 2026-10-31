@@ -111,6 +111,126 @@ export function countTransactions(db: AntibudgetDb): number {
   return row.c;
 }
 
+export function getAccountByAcctId(db: AntibudgetDb, acctId: string): AccountRow | undefined {
+  return db.prepare("SELECT id, acct_id FROM accounts WHERE acct_id = ?").get(acctId) as unknown as
+    | AccountRow
+    | undefined;
+}
+
+export function getOrCreateCategory(db: AntibudgetDb, name: string): number {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Category name must not be empty");
+  }
+  const find = db.prepare("SELECT id FROM categories WHERE name = ?");
+  const existing = find.get(trimmed) as unknown as { id: number } | undefined;
+  if (existing) {
+    return existing.id;
+  }
+  db.prepare("INSERT INTO categories (name) VALUES (?)").run(trimmed);
+  return (find.get(trimmed) as unknown as { id: number }).id;
+}
+
+export interface TransactionRow {
+  accountId: number;
+  acctId: string;
+  fitid: string;
+  amountCents: number;
+  postedAt: string;
+  payee: string | null;
+  memo: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  isManualOverride: boolean;
+  isTransfer: boolean;
+}
+
+export function listAllTransactions(db: AntibudgetDb): TransactionRow[] {
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      t.account_id AS accountId,
+      a.acct_id AS acctId,
+      t.fitid AS fitid,
+      t.amount_cents AS amountCents,
+      t.posted_at AS postedAt,
+      t.payee AS payee,
+      t.memo AS memo,
+      t.category_id AS categoryId,
+      c.name AS categoryName,
+      t.is_manual_override AS isManualOverride,
+      t.is_transfer AS isTransfer
+    FROM transactions t
+    JOIN accounts a ON a.id = t.account_id
+    LEFT JOIN categories c ON c.id = t.category_id
+    ORDER BY t.posted_at, t.fitid
+  `,
+    )
+    .all() as unknown as Array<
+    Omit<TransactionRow, "isManualOverride" | "isTransfer"> & {
+      isManualOverride: number;
+      isTransfer: number;
+    }
+  >;
+
+  return rows.map((row) => ({
+    ...row,
+    isManualOverride: row.isManualOverride === 1,
+    isTransfer: row.isTransfer === 1,
+  }));
+}
+
+export function setTransactionCategoryManual(
+  db: AntibudgetDb,
+  accountId: number,
+  fitid: string,
+  categoryId: number,
+): boolean {
+  const result = db
+    .prepare(
+      `
+    UPDATE transactions
+    SET category_id = ?, is_manual_override = 1
+    WHERE account_id = ? AND fitid = ?
+  `,
+    )
+    .run(categoryId, accountId, fitid);
+  return result.changes > 0;
+}
+
+export interface ApplyCategoryUpdate {
+  accountId: number;
+  fitid: string;
+  categoryId: number;
+  markTransfer: boolean;
+}
+
+/** Updates category only when is_manual_override = 0. */
+export function applyCategoryFromRules(
+  db: AntibudgetDb,
+  updates: ApplyCategoryUpdate[],
+): number {
+  const stmt = db.prepare(`
+    UPDATE transactions
+    SET
+      category_id = ?,
+      is_transfer = CASE WHEN ? = 1 THEN 1 ELSE is_transfer END
+    WHERE account_id = ? AND fitid = ? AND is_manual_override = 0
+  `);
+  let changed = 0;
+  for (const update of updates) {
+    const result = stmt.run(
+      update.categoryId,
+      update.markTransfer ? 1 : 0,
+      update.accountId,
+      update.fitid,
+    );
+    changed += Number(result.changes);
+  }
+  return changed;
+}
+
 /**
  * Future dedup when banks change FITIDs: compute a stable hash from
  * (account_id, posted_at, amount_cents, normalized payee/memo) and

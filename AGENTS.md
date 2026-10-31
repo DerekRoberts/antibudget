@@ -29,4 +29,4 @@
 
 ## Out of scope unless explicitly requested
 
-Web UI, Sankey, rules engine (`rules.yaml` evaluation), net worth, Age of Money, transaction splits, Flatpak/Tauri packaging, bank APIs, importing real user OFX into the repo.
+Web UI, Sankey, net worth, Age of Money, transaction splits, Flatpak/Tauri packaging, bank APIs, importing real user OFX into the repo.
