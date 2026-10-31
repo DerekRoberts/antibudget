@@ -34,6 +34,8 @@ Environment:
 `);
 }
 
+const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 function parseReportArgs(args: string[]): { kind: string; month?: string } {
   const kind = args[1];
   if (!kind) {
@@ -41,8 +43,15 @@ function parseReportArgs(args: string[]): { kind: string; month?: string } {
   }
   let month: string | undefined;
   for (let i = 2; i < args.length; i += 1) {
-    if (args[i] === "--month" && args[i + 1]) {
-      month = args[i + 1];
+    if (args[i] === "--month") {
+      const value = args[i + 1];
+      if (!value || value.startsWith("-")) {
+        throw new Error("--month requires a YYYY-MM value");
+      }
+      if (!REPORT_MONTH_RE.test(value)) {
+        throw new Error(`Invalid --month: ${value} (expected YYYY-MM with month 01-12)`);
+      }
+      month = value;
       i += 1;
     }
   }

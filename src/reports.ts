@@ -79,6 +79,7 @@ export function monthlyIncomeExpenseSeries(db: AntibudgetDb): MonthlyCashflowRow
       SUM(CASE WHEN amount_cents < 0 THEN amount_cents ELSE 0 END) AS expenseCents,
       SUM(amount_cents) AS netCents
     FROM transactions
+    WHERE is_transfer = 0
     GROUP BY month
     ORDER BY month
   `,

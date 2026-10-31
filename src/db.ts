@@ -119,6 +119,9 @@ export function getAccountByAcctId(db: AntibudgetDb, acctId: string): AccountRow
 
 export function getOrCreateCategory(db: AntibudgetDb, name: string): number {
   const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Category name must not be empty");
+  }
   const find = db.prepare("SELECT id FROM categories WHERE name = ?");
   const existing = find.get(trimmed) as unknown as { id: number } | undefined;
   if (existing) {

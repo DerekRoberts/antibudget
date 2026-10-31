@@ -34,14 +34,14 @@ export function categorizeTransactions(options: CategorizeOptions = {}): Categor
   const ownsDb = !options.db;
   const db = options.db ?? openDatabase(paths.dbPath);
 
-  let defaultRulesCreated = false;
-  if (options.createDefaultRules) {
-    defaultRulesCreated = ensureDefaultRulesFile(paths.rulesPath);
-  }
-
-  const rulesFile = options.rules ?? loadRules(paths);
-
   try {
+    let defaultRulesCreated = false;
+    if (options.createDefaultRules) {
+      defaultRulesCreated = ensureDefaultRulesFile(paths.rulesPath);
+    }
+
+    const rulesFile = options.rules ?? loadRules(paths);
+
     const transactions = listAllTransactions(db);
     const updates: ApplyCategoryUpdate[] = [];
 
