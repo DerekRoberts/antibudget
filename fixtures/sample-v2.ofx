@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OFX>
+  <SIGNONMSGSRSV1>
+    <SONRS>
+      <STATUS>
+        <CODE>0</CODE>
+        <SEVERITY>INFO</SEVERITY>
+      </STATUS>
+      <DTSERVER>20260115120000</DTSERVER>
+    </SONRS>
+  </SIGNONMSGSRSV1>
+  <CREDITCARDMSGSRSV1>
+    <CCSTMTTRNRS>
+      <TRNUID>1</TRNUID>
+      <STATUS>
+        <CODE>0</CODE>
+        <SEVERITY>INFO</SEVERITY>
+      </STATUS>
+      <CCSTMTRS>
+        <CURDEF>USD</CURDEF>
+        <CCACCTFROM>
+          <ACCTID>card-synth-4242</ACCTID>
+        </CCACCTFROM>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260108120000</DTPOSTED>
+            <TRNAMT>-15.50</TRNAMT>
+            <FITID>20260108-coffee-001</FITID>
+            <NAME>COFFEE SHOP</NAME>
+            <MEMO>Latte</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+        <LEDGERBAL>
+          <BALAMT>-315.50</BALAMT>
+          <DTASOF>20260131235959</DTASOF>
+        </LEDGERBAL>
+      </CCSTMTRS>
+    </CCSTMTTRNRS>
+  </CREDITCARDMSGSRSV1>
+</OFX>
