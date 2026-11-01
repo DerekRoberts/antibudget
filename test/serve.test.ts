@@ -36,9 +36,13 @@ test("startAntibudgetServer initializes missing database and starts with empty l
   try {
     assert.equal(fs.existsSync(paths.dbPath), true);
     assert.equal(fs.existsSync(paths.inbox), true);
-    const res = await fetch(`${started.url}/api/transactions/uncategorized`);
+    const res = await fetch(`${started.url}/api/ledger/meta`);
     assert.equal(res.status, 200);
-    const data = (await res.json()) as { transactions: unknown[] };
+    const meta = (await res.json()) as { transactionCount: number };
+    assert.equal(meta.transactionCount, 0);
+    const uncategorizedRes = await fetch(`${started.url}/api/transactions/uncategorized`);
+    assert.equal(uncategorizedRes.status, 200);
+    const data = (await uncategorizedRes.json()) as { transactions: unknown[] };
     assert.deepEqual(data.transactions, []);
   } finally {
     await new Promise<void>((resolve, reject) => {

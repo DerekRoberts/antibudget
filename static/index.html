@@ -24,10 +24,10 @@
       <li><a href="/reflection">Reflection</a> — monthly category breakdown and income vs expense trend.</li>
     </ul>
     <script type="module">
-      fetch("/api/reports/cashflow")
+      fetch("/api/ledger/meta")
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (data?.rows?.length > 0) {
+          if (data?.transactionCount > 0) {
             document.getElementById("getting-started")?.remove();
           }
         })

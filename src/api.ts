@@ -5,6 +5,7 @@ import { resolvePaths } from "./config.js";
 import {
   getAccountByAcctId,
   getOrCreateCategory,
+  countTransactions,
   listAccountBalances,
   listCategories,
   openDatabase,
@@ -103,6 +104,10 @@ function withDb<T>(ctx: ApiContext, fn: (db: AntibudgetDb) => T): T {
 
 export function handleGetCategories(ctx: ApiContext): unknown {
   return withDb(ctx, (db) => ({ categories: listCategories(db) }));
+}
+
+export function handleGetLedgerMeta(ctx: ApiContext): unknown {
+  return withDb(ctx, (db) => ({ transactionCount: countTransactions(db) }));
 }
 
 export function handleGetUncategorized(
@@ -214,6 +219,9 @@ export function handleApiRequest(
   const route = async (): Promise<{ status: number; body: unknown }> => {
     if (method === "GET" && pathname === "/api/categories") {
       return { status: 200, body: handleGetCategories(ctx) };
+    }
+    if (method === "GET" && pathname === "/api/ledger/meta") {
+      return { status: 200, body: handleGetLedgerMeta(ctx) };
     }
     if (method === "GET" && pathname === "/api/transactions/uncategorized") {
       return { status: 200, body: handleGetUncategorized(ctx, query) };
