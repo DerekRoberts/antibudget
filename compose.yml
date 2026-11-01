@@ -16,15 +16,14 @@ services:
   dev:
     container_name: antibudget-dev
     <<: *service-defaults
-    user: "${UID:-1000}:${GID:-1000}"
     environment:
       <<: *app-env
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - antibudget-data:/data
-      # Optional: ingest from a host folder (Podman SELinux :z)
-      # - ${HOME}/Documents/antibudget-inbox:/data/inbox:ro,z
+      # Optional: ingest from a host folder (Podman SELinux :z; rw so ingest can archive)
+      # - ${HOME}/Documents/antibudget-inbox:/data/inbox:rw,z
     command: ["serve", "--host", "0.0.0.0", "--port", "8080"]
 
 volumes:

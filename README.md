@@ -72,21 +72,19 @@ npx antibudget serve              # http://127.0.0.1:8080 — triage + reflectio
 
 ## Local with Podman / Docker Compose
 
-From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8080** only):
+From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8080** only).
+
+**First run** (empty data volume — ingest before `serve` will start):
 
 ```bash
+podman compose run --rm dev ingest /app/fixtures/sample.ofx
 podman compose up --build
 # or: docker compose up --build
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080). On first run, ingest once into the named volume `antibudget-data`:
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
 
-```bash
-podman compose run --rm dev ingest /app/fixtures/sample.ofx
-podman compose up
-```
-
-**Data:** `ANTIBUDGET_HOME` is `/data` in the container (see `compose.yml`). Drop real `.ofx`/`.qfx` into the volume’s `inbox/`, or uncomment the optional bind mount in `compose.yml` (uses `:z` for Podman SELinux), then:
+**Data:** `ANTIBUDGET_HOME` is `/data` in the container (see `compose.yml`). Drop real `.ofx`/`.qfx` into the volume’s `inbox/`, or uncomment the optional bind mount in `compose.yml` (read-write `:rw,z` so ingest can archive), then:
 
 ```bash
 podman compose run --rm dev ingest

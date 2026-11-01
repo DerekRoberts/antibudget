@@ -42,6 +42,19 @@ const REPORT_KINDS = ["monthly", "cashflow", "uncategorized", "triage"] as const
 type ReportKind = (typeof REPORT_KINDS)[number];
 const REPORT_KIND_SET = new Set<string>(REPORT_KINDS);
 
+const LOOPBACK_BIND_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+function isLoopbackBindHost(host: string): boolean {
+  return LOOPBACK_BIND_HOSTS.has(host.toLowerCase());
+}
+
+function serveDisplayUrl(host: string, port: number, boundUrl: string): string {
+  if (host === "0.0.0.0" || host === "::") {
+    return `http://127.0.0.1:${port}`;
+  }
+  return boundUrl;
+}
+
 function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
   return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
 }
@@ -205,12 +218,27 @@ async function main(): Promise<void> {
         if (!value || value.startsWith("-")) {
           throw new Error("--host requires a hostname or address");
         }
+        if (/\s/.test(value)) {
+          throw new Error(`Invalid --host: ${value}`);
+        }
         host = value;
         i += 1;
       }
     }
+    if (!isLoopbackBindHost(host)) {
+      console.error(
+        "Warning: binding to a non-loopback address; Host-header checks are not an authentication boundary.",
+      );
+    }
     const started = await startAntibudgetServer({ host, port });
-    console.log(`antibudget UI at ${started.url} (localhost only)`);
+    const displayUrl = serveDisplayUrl(host, started.port, started.url);
+    const localityNote =
+      host === "0.0.0.0" || host === "::"
+        ? " (container listens on all interfaces; use the host-mapped URL above)"
+        : isLoopbackBindHost(host)
+          ? " (localhost only)"
+          : "";
+    console.log(`antibudget UI at ${displayUrl}${localityNote}`);
     console.log("Press Ctrl+C to stop.");
     return;
   }
