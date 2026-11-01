@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 export interface AntibudgetPaths {
   home: string;
@@ -51,10 +50,4 @@ export function resolvePaths(options?: {
   }
 
   return paths;
-}
-
-/** Path to committed `fixtures/rules.example.yaml` (present in a git checkout / npm link). */
-export function repositoryExampleRulesPath(): string {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.join(moduleDir, "..", "..", "fixtures", "rules.example.yaml");
 }

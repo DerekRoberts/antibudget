@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { categorizeTransactions } from "./categorize.js";
-import { repositoryExampleRulesPath, resolvePaths } from "./config.js";
+import { resolvePaths } from "./config.js";
 import { countTransactions, openDatabase } from "./db.js";
 import { ingestOfxPaths } from "./ingest.js";
 import { setManualTransactionCategory } from "./manual.js";
@@ -38,6 +38,7 @@ Environment:
 }
 
 const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const REPORT_KINDS = new Set(["monthly", "cashflow", "uncategorized", "triage"]);
 
 function parseReportArgs(args: string[]): { kind: string; month?: string } {
   const kind = args[1];
@@ -102,12 +103,8 @@ async function main(): Promise<void> {
     const paths = resolvePaths({ createDirs: true });
     const result = categorizeTransactions({ paths, createDefaultRules: initRules });
     if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
-      const example = repositoryExampleRulesPath();
-      const exampleHint = fs.existsSync(example)
-        ? ` Copy ${example} to ${paths.rulesPath}, or run`
-        : " Run";
       console.error(
-        `No rules.yaml at ${paths.rulesPath}.${exampleHint} "antibudget categorize --init-rules".`,
+        `No rules.yaml at ${paths.rulesPath}. Run "antibudget categorize --init-rules" to create starter rules from the repo example (when installed from git) or the built-in template.`,
       );
     }
     console.log(JSON.stringify(result, null, 2));
@@ -129,6 +126,9 @@ async function main(): Promise<void> {
 
   if (command === "report") {
     const { kind, month } = parseReportArgs(args);
+    if (!REPORT_KINDS.has(kind)) {
+      throw new Error(`Unknown report subcommand: ${kind}`);
+    }
     const paths = resolvePaths({ createDirs: false });
     const db = openDatabase(paths.dbPath);
     try {
