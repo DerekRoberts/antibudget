@@ -138,6 +138,7 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
     start += 2;
   }
 
+  let closed = false;
   while (start < body.length) {
     const headerEnd = body.indexOf("\r\n\r\n", start);
     if (headerEnd === -1) {
@@ -162,12 +163,16 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
       }
     }
     if (isClosing) {
+      closed = true;
       break;
     }
     start = afterDelimiter;
     if (body[start] === 13 && body[start + 1] === 10) {
       start += 2;
     }
+  }
+  if (!closed) {
+    throw new ApiError(400, "Malformed multipart body");
   }
   return files;
 }

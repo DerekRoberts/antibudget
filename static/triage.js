@@ -197,7 +197,11 @@ async function init() {
   document.getElementById("payee-filter")?.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") void loadTransactions();
   });
-  window.addEventListener("antibudget:ingested", () => {
+  window.addEventListener("antibudget:ingested", (ev) => {
+    const failed = ev.detail?.errors ?? 0;
+    if (failed > 0) {
+      window.alert(`${failed} file(s) failed to import. Other files were imported.`);
+    }
     void loadCategories()
       .then(() => loadTransactions())
       .catch((err) => {
