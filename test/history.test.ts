@@ -23,6 +23,7 @@ import { setManualTransactionCategoryInDb } from "../src/manual.js";
 
 const repoRoot = path.join(import.meta.dirname, "..", "..");
 const fixturePath = path.join(repoRoot, "fixtures", "sample.ofx");
+const rulesExamplePath = path.join(repoRoot, "fixtures", "rules.example.yaml");
 
 function setupHomeWithIngest(): ReturnType<typeof resolvePaths> {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-history-"));
@@ -193,5 +194,24 @@ test("new mutation clears redo branch", () => {
     categoryName: "C",
   });
   assert.equal(getHistoryStatus(db).canRedo, false);
+  db.close();
+});
+
+test("undo ingest restores rule categorization on pre-existing transactions", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-history-rules-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  fs.copyFileSync(fixturePath, path.join(paths.inbox, "sample.ofx"));
+  openDatabase(paths.dbPath).close();
+  ingestOfxPaths({ paths, recordHistory: false });
+  fs.copyFileSync(rulesExamplePath, paths.rulesPath);
+  const reimportPath = path.join(paths.inbox, "reimport.ofx");
+  fs.copyFileSync(fixturePath, reimportPath);
+  ingestOfxPaths({ paths, sourcePath: reimportPath, recordHistory: true });
+  const db = openDatabase(paths.dbPath);
+  const amazon = listAllTransactions(db).find((t) => /amazon/i.test(t.payee ?? ""));
+  assert.ok(amazon?.categoryName);
+  undoLedgerMutation(db);
+  const afterUndo = listAllTransactions(db).find((t) => t.fitid === amazon!.fitid);
+  assert.equal(afterUndo?.categoryName, null);
   db.close();
 });

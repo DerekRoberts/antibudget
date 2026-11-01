@@ -11,7 +11,10 @@ import {
   type AntibudgetDb,
   type StoredTransactionRow,
   type TransactionClassification,
+  type TransactionClassificationSnapshot,
   type TransactionKey,
+  listTransactionClassificationSnapshots,
+  transactionKeyString,
 } from "./db.js";
 
 export type HistoryKind = "category" | "ingest";
@@ -29,6 +32,14 @@ export interface IngestHistoryPayload {
   rows: IngestHistoryRow[];
   accountBalancesBefore: AccountBalanceSnapshot[];
   accountBalancesAfter: AccountBalanceSnapshot[];
+  categoryChanges?: IngestCategoryChange[];
+}
+
+export interface IngestCategoryChange {
+  accountId: number;
+  fitid: string;
+  before: TransactionClassification;
+  after: TransactionClassification;
 }
 
 export interface HistoryStatus {
@@ -114,14 +125,63 @@ function applyCategoryBackward(db: AntibudgetDb, payload: CategoryHistoryPayload
   applyCategoryState(db, payload.accountId, payload.fitid, payload.before);
 }
 
+function classificationsEqual(a: TransactionClassification, b: TransactionClassification): boolean {
+  return (
+    a.categoryId === b.categoryId &&
+    a.isManualOverride === b.isManualOverride &&
+    a.isTransfer === b.isTransfer
+  );
+}
+
+function diffIngestCategoryChanges(
+  before: TransactionClassificationSnapshot[],
+  after: TransactionClassificationSnapshot[],
+  excludeKeys: Set<string>,
+): IngestCategoryChange[] {
+  const afterByKey = new Map(
+    after.map((row) => [transactionKeyString(row.accountId, row.fitid), row.classification]),
+  );
+  const changes: IngestCategoryChange[] = [];
+  for (const row of before) {
+    const key = transactionKeyString(row.accountId, row.fitid);
+    if (excludeKeys.has(key)) {
+      continue;
+    }
+    const next = afterByKey.get(key);
+    if (!next || classificationsEqual(row.classification, next)) {
+      continue;
+    }
+    changes.push({
+      accountId: row.accountId,
+      fitid: row.fitid,
+      before: row.classification,
+      after: next,
+    });
+  }
+  return changes;
+}
+
+function applyIngestCategoryChanges(
+  db: AntibudgetDb,
+  changes: IngestCategoryChange[],
+  direction: "backward" | "forward",
+): void {
+  for (const change of changes) {
+    const state = direction === "backward" ? change.before : change.after;
+    restoreTransactionClassification(db, change.accountId, change.fitid, state);
+  }
+}
+
 function applyIngestForward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
   syncAccountsForIngestRedo(db, payload.accountBalancesAfter ?? []);
   for (const row of payload.rows) {
     insertTransactionFromHistory(db, row);
   }
+  applyIngestCategoryChanges(db, payload.categoryChanges ?? [], "forward");
 }
 
 function applyIngestBackward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
+  applyIngestCategoryChanges(db, payload.categoryChanges ?? [], "backward");
   const keys: TransactionKey[] = payload.rows.map((row) => ({
     accountId: row.accountId,
     fitid: row.fitid,
@@ -174,6 +234,15 @@ function eventLabel(kind: HistoryKind, payload: CategoryHistoryPayload | IngestH
   return `Import ${n} transaction${n === 1 ? "" : "s"}`;
 }
 
+export function collectIngestCategoryChanges(
+  db: AntibudgetDb,
+  before: TransactionClassificationSnapshot[],
+  excludeKeys: Set<string>,
+): IngestCategoryChange[] {
+  const after = listTransactionClassificationSnapshots(db);
+  return diffIngestCategoryChanges(before, after, excludeKeys);
+}
+
 export function recordCategoryHistory(
   db: AntibudgetDb,
   accountId: number,
@@ -196,16 +265,18 @@ export function recordIngestHistory(
   rows: IngestHistoryRow[],
   accountBalancesBefore: AccountBalanceSnapshot[],
   accountBalancesAfter: AccountBalanceSnapshot[],
+  categoryChanges: IngestCategoryChange[] = [],
 ): void {
   const unchangedBalances =
     JSON.stringify(accountBalancesBefore) === JSON.stringify(accountBalancesAfter);
-  if (rows.length === 0 && unchangedBalances) {
+  if (rows.length === 0 && unchangedBalances && categoryChanges.length === 0) {
     return;
   }
   appendEvent(db, "ingest", {
     rows,
     accountBalancesBefore,
     accountBalancesAfter,
+    categoryChanges,
   } satisfies IngestHistoryPayload);
 }
 

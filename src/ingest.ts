@@ -9,14 +9,16 @@ import {
   countTransactions,
   insertTransactionIgnore,
   listAccountBalanceSnapshots,
+  listTransactionClassificationSnapshots,
   loadStoredTransactionRows,
   openDatabase,
   runInTransaction,
+  transactionKeyString,
   upsertAccount,
   type AntibudgetDb,
   type TransactionKey,
 } from "./db.js";
-import { recordIngestHistory } from "./history.js";
+import { collectIngestCategoryChanges, recordIngestHistory } from "./history.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
 import { loadRules, type RulesFile } from "./rules.js";
 
@@ -152,6 +154,10 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
     const accountBalancesBefore = recordHistory ? listAccountBalanceSnapshots(db) : null;
     const insertedKeys: TransactionKey[] = [];
     let ingestError: unknown;
+    let historyError: unknown;
+    let historyFailed = false;
+    let classificationBefore: ReturnType<typeof listTransactionClassificationSnapshots> | null =
+      null;
 
     try {
       for (const filePath of files) {
@@ -167,6 +173,9 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       }
 
       if (files.length > 0 && rulesFile) {
+        if (recordHistory) {
+          classificationBefore = listTransactionClassificationSnapshots(db);
+        }
         categorizeTransactions({ paths, db, rules: rulesFile });
       }
     } catch (error) {
@@ -176,17 +185,35 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
         try {
           const rows = loadStoredTransactionRows(db, insertedKeys);
           const accountBalancesAfter = listAccountBalanceSnapshots(db);
+          const excludeKeys = new Set(
+            insertedKeys.map((key) => transactionKeyString(key.accountId, key.fitid)),
+          );
+          const categoryChanges =
+            classificationBefore !== null
+              ? collectIngestCategoryChanges(db, classificationBefore, excludeKeys)
+              : [];
           runInTransaction(db, () => {
-            recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
+            recordIngestHistory(
+              db,
+              rows,
+              accountBalancesBefore,
+              accountBalancesAfter,
+              categoryChanges,
+            );
           });
-        } catch (historyError) {
-          console.error(historyError);
+        } catch (error) {
+          historyFailed = true;
+          historyError = error;
+          console.error(error);
         }
       }
     }
 
     if (ingestError) {
       throw ingestError;
+    }
+    if (historyFailed) {
+      throw historyError;
     }
 
     return {

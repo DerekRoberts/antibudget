@@ -431,6 +431,49 @@ export function snapshotTransactionKeys(db: AntibudgetDb): Set<string> {
   return new Set(rows.map((row) => `${row.accountId}\0${row.fitid}`));
 }
 
+export interface TransactionClassificationSnapshot {
+  accountId: number;
+  fitid: string;
+  classification: TransactionClassification;
+}
+
+export function listTransactionClassificationSnapshots(
+  db: AntibudgetDb,
+): TransactionClassificationSnapshot[] {
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      account_id AS accountId,
+      fitid,
+      category_id AS categoryId,
+      is_manual_override AS isManualOverride,
+      is_transfer AS isTransfer
+    FROM transactions
+  `,
+    )
+    .all() as unknown as Array<
+    Omit<TransactionClassificationSnapshot, "classification"> & {
+      categoryId: number | null;
+      isManualOverride: number;
+      isTransfer: number;
+    }
+  >;
+  return rows.map((row) => ({
+    accountId: row.accountId,
+    fitid: row.fitid,
+    classification: {
+      categoryId: row.categoryId,
+      isManualOverride: row.isManualOverride === 1,
+      isTransfer: row.isTransfer === 1,
+    },
+  }));
+}
+
+export function transactionKeyString(accountId: number, fitid: string): string {
+  return `${accountId}\0${fitid}`;
+}
+
 export function transactionExists(
   db: AntibudgetDb,
   accountId: number,

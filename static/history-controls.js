@@ -72,11 +72,14 @@ export function mountHistoryControls(container) {
     redoBtn.disabled = true;
     try {
       const result = await postMutation(path);
-      if (!result?.applied) {
+      if (!result) {
         return;
       }
       if (result.status) {
         applyStatus(result.status);
+      }
+      if (!result.applied) {
+        return;
       }
       window.dispatchEvent(
         new CustomEvent("antibudget:history-changed", {
