@@ -4,17 +4,19 @@ import type { AntibudgetPaths } from "./config.js";
 import { resolvePaths } from "./config.js";
 import {
   countTransactions,
-  getAccountByAcctId,
-  getOrCreateCategory,
   listAccountBalances,
   listCategories,
   openDatabase,
-  setTransactionCategoryManual,
-  transactionExists,
 } from "./db.js";
 import { handleIngestUpload } from "./upload.js";
 import type { AntibudgetDb } from "./db.js";
 import { assertSafeMutationRequest } from "./http-guard.js";
+import {
+  getHistoryStatus,
+  redoLedgerMutation,
+  undoLedgerMutation,
+} from "./history.js";
+import { setManualTransactionCategoryInDb } from "./manual.js";
 import {
   listUncategorizedTransactions,
   monthlyCategoryRollup,
@@ -153,17 +155,18 @@ export function handleSetTransactionCategory(
   body: SetCategoryBody,
 ): unknown {
   return withDb(ctx, (db) => {
-    const account = getAccountByAcctId(db, body.acctId);
-    if (!account) {
-      throw new ApiError(404, `Unknown account: ${body.acctId}`);
-    }
-    if (!transactionExists(db, account.id, body.fitid)) {
-      throw new ApiError(404, `Transaction not found: ${body.acctId} / ${body.fitid}`);
-    }
-    const categoryId = getOrCreateCategory(db, body.categoryName);
-    const updated = setTransactionCategoryManual(db, account.id, body.fitid, categoryId);
-    if (!updated) {
-      throw new ApiError(500, "Failed to update transaction category");
+    try {
+      setManualTransactionCategoryInDb(db, body);
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.message.startsWith("Unknown account:")) {
+          throw new ApiError(404, err.message);
+        }
+        if (err.message.startsWith("Transaction not found:")) {
+          throw new ApiError(404, err.message);
+        }
+      }
+      throw err;
     }
     return {
       updated: true,
@@ -172,6 +175,18 @@ export function handleSetTransactionCategory(
       categoryName: body.categoryName,
     };
   });
+}
+
+export function handleGetHistoryStatus(ctx: ApiContext): unknown {
+  return withDb(ctx, (db) => getHistoryStatus(db));
+}
+
+export function handleUndo(ctx: ApiContext): unknown {
+  return withDb(ctx, (db) => undoLedgerMutation(db));
+}
+
+export function handleRedo(ctx: ApiContext): unknown {
+  return withDb(ctx, (db) => redoLedgerMutation(db));
 }
 
 export function handleGetMonthlyReport(
@@ -247,6 +262,17 @@ export function handleApiRequest(
       const raw = await readJsonBody<unknown>(req);
       const body = parseSetCategoryBody(raw);
       return { status: 200, body: handleSetTransactionCategory(ctx, body) };
+    }
+    if (method === "GET" && pathname === "/api/history/status") {
+      return { status: 200, body: handleGetHistoryStatus(ctx) };
+    }
+    if (method === "POST" && pathname === "/api/history/undo") {
+      assertSafeMutationRequest(req);
+      return { status: 200, body: handleUndo(ctx) };
+    }
+    if (method === "POST" && pathname === "/api/history/redo") {
+      assertSafeMutationRequest(req);
+      return { status: 200, body: handleRedo(ctx) };
     }
     return { status: 404, body: { error: "Not found" } };
   };

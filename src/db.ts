@@ -32,6 +32,19 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_posted_at ON transactions (posted_at);
+
+CREATE TABLE IF NOT EXISTS ledger_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL CHECK (kind IN ('category', 'ingest')),
+  payload TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ledger_history_cursor (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  cursor_id INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT OR IGNORE INTO ledger_history_cursor (singleton, cursor_id) VALUES (1, 0);
 `;
 
 export type AntibudgetDb = DatabaseSync;
@@ -226,6 +239,119 @@ export function setTransactionCategoryManual(
     )
     .run(categoryId, accountId, fitid);
   return result.changes > 0;
+}
+
+export interface TransactionClassification {
+  categoryId: number | null;
+  isManualOverride: boolean;
+  isTransfer: boolean;
+}
+
+export function getTransactionClassification(
+  db: AntibudgetDb,
+  accountId: number,
+  fitid: string,
+): TransactionClassification | undefined {
+  const row = db
+    .prepare(
+      `
+    SELECT
+      category_id AS categoryId,
+      is_manual_override AS isManualOverride,
+      is_transfer AS isTransfer
+    FROM transactions
+    WHERE account_id = ? AND fitid = ?
+  `,
+    )
+    .get(accountId, fitid) as unknown as
+    | {
+        categoryId: number | null;
+        isManualOverride: number;
+        isTransfer: number;
+      }
+    | undefined;
+  if (!row) {
+    return undefined;
+  }
+  return {
+    categoryId: row.categoryId,
+    isManualOverride: row.isManualOverride === 1,
+    isTransfer: row.isTransfer === 1,
+  };
+}
+
+export function restoreTransactionClassification(
+  db: AntibudgetDb,
+  accountId: number,
+  fitid: string,
+  state: TransactionClassification,
+): boolean {
+  const result = db
+    .prepare(
+      `
+    UPDATE transactions
+    SET
+      category_id = ?,
+      is_manual_override = ?,
+      is_transfer = ?
+    WHERE account_id = ? AND fitid = ?
+  `,
+    )
+    .run(
+      state.categoryId,
+      state.isManualOverride ? 1 : 0,
+      state.isTransfer ? 1 : 0,
+      accountId,
+      fitid,
+    );
+  return result.changes > 0;
+}
+
+export interface TransactionKey {
+  accountId: number;
+  fitid: string;
+}
+
+export function deleteTransactionsByKeys(db: AntibudgetDb, keys: TransactionKey[]): number {
+  const stmt = db.prepare("DELETE FROM transactions WHERE account_id = ? AND fitid = ?");
+  let deleted = 0;
+  for (const key of keys) {
+    const result = stmt.run(key.accountId, key.fitid);
+    deleted += Number(result.changes);
+  }
+  return deleted;
+}
+
+export interface StoredTransactionRow extends InsertTransactionInput {
+  accountId: number;
+}
+
+export function listTransactionsInsertedSince(
+  db: AntibudgetDb,
+  knownKeys: Set<string>,
+): StoredTransactionRow[] {
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      account_id AS accountId,
+      fitid,
+      amount_cents AS amountCents,
+      posted_at AS postedAt,
+      payee,
+      memo
+    FROM transactions
+  `,
+    )
+    .all() as unknown as StoredTransactionRow[];
+  return rows.filter((row) => !knownKeys.has(`${row.accountId}\0${row.fitid}`));
+}
+
+export function snapshotTransactionKeys(db: AntibudgetDb): Set<string> {
+  const rows = db
+    .prepare("SELECT account_id AS accountId, fitid FROM transactions")
+    .all() as unknown as TransactionKey[];
+  return new Set(rows.map((row) => `${row.accountId}\0${row.fitid}`));
 }
 
 export function transactionExists(

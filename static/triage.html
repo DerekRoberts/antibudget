@@ -16,10 +16,12 @@
       </nav>
     </header>
     <p class="status">
-      Tab through rows; change category to save immediately (<kbd>is_manual_override</kbd> set).
+      Tab through rows; change category to save immediately (<kbd>is_manual_override</kbd> set). Use
+      <strong>Undo</strong> / <strong>Redo</strong> (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) to reverse mistakes.
     </p>
     <div id="ingest-drop-wrap" hidden></div>
     <div>
+      <div id="history-controls"></div>
       <label>
         Payee filter
         <input type="search" id="payee-filter" placeholder="e.g. amazon" autocomplete="off" />

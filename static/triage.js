@@ -71,6 +71,7 @@ async function onCategoryChange(select) {
     select.value = "";
     return;
   }
+  window.dispatchEvent(new CustomEvent("antibudget:history-changed", { detail: { action: "categorize" } }));
   const row = select.closest("tr");
   row?.remove();
   updateCount();
@@ -189,6 +190,11 @@ function escapeHtml(text) {
 }
 
 async function init() {
+  const { mountHistoryControls } = await import("/history-controls.js");
+  const historyMount = document.getElementById("history-controls");
+  if (historyMount) {
+    mountHistoryControls(historyMount);
+  }
   await loadCategories();
   await loadTransactions();
   document.getElementById("reload")?.addEventListener("click", () => {
@@ -202,6 +208,14 @@ async function init() {
     if (failed > 0) {
       window.alert(`${failed} file(s) failed to import. Other files were imported.`);
     }
+    void loadCategories()
+      .then(() => loadTransactions())
+      .catch((err) => {
+        console.error(err);
+        window.alert(String(err));
+      });
+  });
+  window.addEventListener("antibudget:history-changed", () => {
     void loadCategories()
       .then(() => loadTransactions())
       .catch((err) => {

@@ -8,11 +8,14 @@ import { resolvePaths, type AntibudgetPaths } from "./config.js";
 import {
   countTransactions,
   insertTransactionIgnore,
+  listTransactionsInsertedSince,
   openDatabase,
   runInTransaction,
+  snapshotTransactionKeys,
   upsertAccount,
   type AntibudgetDb,
 } from "./db.js";
+import { recordIngestHistory } from "./history.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
 import { loadRules, type RulesFile } from "./rules.js";
 
@@ -29,6 +32,8 @@ export interface IngestOptions {
   sourcePath?: string;
   /** When ingesting a directory, include OFX/QFX in subdirectories (default: false). */
   recursive?: boolean;
+  /** When false, skip ledger undo history for this run (default: true). */
+  recordHistory?: boolean;
 }
 
 const OFX_EXTENSIONS = new Set([".ofx", ".qfx"]);
@@ -142,6 +147,8 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       : undefined;
     let transactionsInserted = 0;
     let transactionsSkipped = 0;
+    const recordHistory = options.recordHistory !== false;
+    const keysBefore = recordHistory ? snapshotTransactionKeys(db) : null;
 
     for (const filePath of files) {
       const parsed = parseOfxFile(filePath);
@@ -157,6 +164,11 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
 
     if (files.length > 0 && rulesFile) {
       categorizeTransactions({ paths, db, rules: rulesFile });
+    }
+
+    if (recordHistory && keysBefore) {
+      const newRows = listTransactionsInsertedSince(db, keysBefore);
+      recordIngestHistory(db, newRows);
     }
 
     return {
