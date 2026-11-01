@@ -149,9 +149,12 @@ async function loadTransactions() {
       if (transactionCount !== null) {
         await syncEmptyLedgerDropZone(transactionCount);
       }
+<<<<<<< HEAD
       if (generation !== loadGeneration) {
         return;
       }
+=======
+>>>>>>> c444087 (fix(api): harden upload path and address review feedback)
       td.textContent =
         transactionCount === null
           ? "No uncategorized transactions to show."

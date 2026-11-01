@@ -14,6 +14,7 @@ import {
 } from "./db.js";
 import { handleIngestUpload } from "./upload.js";
 import type { AntibudgetDb } from "./db.js";
+import { assertSafeMutationRequest } from "./http-guard.js";
 import {
   listUncategorizedTransactions,
   monthlyCategoryRollup,
@@ -225,6 +226,7 @@ export function handleApiRequest(
       return { status: 200, body: handleGetLedgerMeta(ctx) };
     }
     if (method === "POST" && pathname === "/api/ingest/upload") {
+      assertSafeMutationRequest(req);
       const body = await handleIngestUpload(ctx.paths, req);
       return { status: 200, body };
     }
@@ -241,6 +243,7 @@ export function handleApiRequest(
       return { status: 200, body: handleGetNetWorth(ctx) };
     }
     if (method === "PUT" && pathname === "/api/transactions/category") {
+      assertSafeMutationRequest(req);
       const raw = await readJsonBody<unknown>(req);
       const body = parseSetCategoryBody(raw);
       return { status: 200, body: handleSetTransactionCategory(ctx, body) };

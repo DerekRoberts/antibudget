@@ -122,11 +122,9 @@ test("POST /api/ingest/upload ingests fixture and archives under ANTIBUDGET_HOME
     filesProcessed: number;
     transactionsInserted: number;
     transactionsSkipped: number;
-    errors: number;
   };
   assert.equal(result.filesProcessed, 1);
   assert.ok(result.transactionsInserted >= 1);
-  assert.equal(result.errors, 0);
 
   const db = openDatabase(paths.dbPath);
   assert.ok(countTransactions(db) >= 1);
@@ -162,6 +160,37 @@ test("POST /api/ingest/upload rejects non-OFX filenames", async () => {
 
   assert.equal(status, 400);
   assert.match((body as { error: string }).error, /\.ofx and \.qfx/);
+});
+
+test("POST /api/ingest/upload rejects cross-site browser requests", async () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-upload-csrf-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  openDatabase(paths.dbPath).close();
+
+  const boundary = "csrf-test";
+  const payload = buildMultipart(boundary, [
+    { filename: "sample.ofx", content: Buffer.from("OFXHEADER:100") },
+  ]);
+  const req = new MockIncomingMessage(
+    {
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      "content-length": String(payload.length),
+      "sec-fetch-site": "cross-site",
+      origin: "https://evil.example",
+    },
+    payload,
+  );
+
+  const ctx = createApiContext({ home: paths.home });
+  const { status } = await handleApiRequest(
+    ctx,
+    "POST",
+    "/api/ingest/upload",
+    new URLSearchParams(),
+    req as unknown as import("node:http").IncomingMessage,
+  );
+
+  assert.equal(status, 403);
 });
 
 test("upload via HTTP on running server updates ledger meta", async () => {

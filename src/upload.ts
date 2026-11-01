@@ -13,9 +13,7 @@ export interface ParsedUploadFile {
   data: Buffer;
 }
 
-export interface IngestUploadResponse extends IngestResult {
-  errors: number;
-}
+export interface IngestUploadResponse extends IngestResult {}
 
 function parseContentTypeBoundary(contentType: string): string | null {
   const match = contentType.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
@@ -90,20 +88,23 @@ async function readRequestBody(req: IncomingMessage, maxBytes: number): Promise<
 
 /** Parses multipart/form-data file parts (field name ignored). */
 export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploadFile[] {
-  const delimiter = Buffer.from(`--${boundary}`);
   const files: ParsedUploadFile[] = [];
-  let start = body.indexOf(delimiter);
-  if (start === -1) {
+  const opening = Buffer.from(`--${boundary}`);
+  const partDelimiter = Buffer.from(`\r\n--${boundary}`);
+  const closing = Buffer.from(`--${boundary}--`);
+
+  if (!body.subarray(0, opening.length).equals(opening)) {
     return files;
   }
 
-  while (start !== -1) {
-    start += delimiter.length;
-    if (body[start] === 45 && body[start + 1] === 45) {
+  let start = opening.length;
+  if (body[start] === 13 && body[start + 1] === 10) {
+    start += 2;
+  }
+
+  while (start < body.length) {
+    if (body.subarray(start, start + closing.length).equals(closing)) {
       break;
-    }
-    if (body[start] === 13 && body[start + 1] === 10) {
-      start += 2;
     }
     const headerEnd = body.indexOf("\r\n\r\n", start);
     if (headerEnd === -1) {
@@ -111,14 +112,11 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
     }
     const headerBlock = body.subarray(start, headerEnd).toString("utf8");
     const dataStart = headerEnd + 4;
-    const next = body.indexOf(delimiter, dataStart);
+    const next = body.indexOf(partDelimiter, dataStart);
     if (next === -1) {
       break;
     }
-    let dataEnd = next;
-    if (body[dataEnd - 2] === 13 && body[dataEnd - 1] === 10) {
-      dataEnd -= 2;
-    }
+    const dataEnd = next;
     const disposition = headerBlock
       .split("\r\n")
       .find((line) => line.toLowerCase().startsWith("content-disposition:"));
@@ -128,7 +126,10 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
         files.push({ filename, data: body.subarray(dataStart, dataEnd) });
       }
     }
-    start = next;
+    start = next + partDelimiter.length;
+    if (body[start] === 13 && body[start + 1] === 10) {
+      start += 2;
+    }
   }
   return files;
 }
@@ -187,10 +188,16 @@ export function ingestUploadedFiles(
       fs.writeFileSync(path.join(stagingDir, name), file.data);
     }
     const result = ingestOfxPaths({ paths, sourcePath: stagingDir });
-    return { ...result, errors: 0 };
+    return result;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Ingest failed";
-    throw new ApiError(422, message);
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    if (/OFX|QFX|parse|Ingest path is not/i.test(message)) {
+      throw new ApiError(422, "Invalid or unreadable OFX/QFX export");
+    }
+    throw new ApiError(500, "Import failed");
   } finally {
     try {
       fs.rmSync(stagingDir, { recursive: true, force: true });
