@@ -55,14 +55,23 @@ export function pathContainsGlob(raw: string): boolean {
   return raw.indexOf("]", open + 1) !== -1;
 }
 
-/** Resolves CLI ingest paths: tilde expansion, then absolute path (non-glob). */
-export function resolveIngestUserPath(raw: string): string {
+type IngestSourceResolution =
+  | { kind: "glob"; pattern: string }
+  | { kind: "literal"; path: string };
+
+function resolveIngestSource(raw: string): IngestSourceResolution {
   const expanded = expandTilde(raw);
   const resolved = path.resolve(expanded);
   if (pathContainsGlob(expanded) && !fs.existsSync(resolved)) {
-    return expanded;
+    return { kind: "glob", pattern: expanded };
   }
-  return resolved;
+  return { kind: "literal", path: resolved };
+}
+
+/** Resolves CLI ingest paths: tilde expansion, then absolute path (non-glob). */
+export function resolveIngestUserPath(raw: string): string {
+  const source = resolveIngestSource(raw);
+  return source.kind === "glob" ? source.pattern : source.path;
 }
 
 function isOfxExtension(filePath: string): boolean {
@@ -70,17 +79,13 @@ function isOfxExtension(filePath: string): boolean {
 }
 
 function isRegularOfxFile(filePath: string): boolean {
+  if (!isOfxExtension(filePath)) {
+    return false;
+  }
   try {
-    return fs.statSync(filePath).isFile() && isOfxExtension(filePath);
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as NodeJS.ErrnoException).code
-        : undefined;
-    if (code === "ENOENT") {
-      return false;
-    }
-    throw error;
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
   }
 }
 
@@ -162,10 +167,11 @@ function resolveIngestFiles(
   if (!sourcePath) {
     return listOfxFiles(paths.inbox);
   }
-  const resolved = path.resolve(expandTilde(sourcePath));
-  if (pathContainsGlob(sourcePath) && !fs.existsSync(resolved)) {
-    return listOfxFilesFromGlobPattern(sourcePath);
+  const source = resolveIngestSource(sourcePath);
+  if (source.kind === "glob") {
+    return listOfxFilesFromGlobPattern(source.pattern);
   }
+  const resolved = source.path;
   if (!fs.existsSync(resolved)) {
     throw new Error(`Ingest path not found: ${resolved}`);
   }

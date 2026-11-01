@@ -100,6 +100,7 @@ test("listOfxFiles with recursive scans subdirectories", () => {
   try {
     const nested = path.join(dir, "nested");
     fs.mkdirSync(nested);
+    fs.mkdirSync(path.join(nested, "exports.ofx"));
     fs.copyFileSync(fixturePath, path.join(dir, "top.ofx"));
     fs.copyFileSync(fixturePath, path.join(nested, "deep.qfx"));
     assert.deepEqual(listOfxFiles(dir), [path.join(dir, "top.ofx")]);
