@@ -117,6 +117,35 @@ export function getAccountByAcctId(db: AntibudgetDb, acctId: string): AccountRow
     | undefined;
 }
 
+export interface CategoryRow {
+  id: number;
+  name: string;
+}
+
+export function listCategories(db: AntibudgetDb): CategoryRow[] {
+  return db
+    .prepare("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE")
+    .all() as unknown as CategoryRow[];
+}
+
+export interface AccountBalanceRow {
+  acctId: string;
+  name: string | null;
+  ledgerBalanceCents: number | null;
+}
+
+export function listAccountBalances(db: AntibudgetDb): AccountBalanceRow[] {
+  return db
+    .prepare(
+      `
+    SELECT acct_id AS acctId, name, ledger_balance_cents AS ledgerBalanceCents
+    FROM accounts
+    ORDER BY acct_id
+  `,
+    )
+    .all() as unknown as AccountBalanceRow[];
+}
+
 export function getOrCreateCategory(db: AntibudgetDb, name: string): number {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -197,6 +226,17 @@ export function setTransactionCategoryManual(
     )
     .run(categoryId, accountId, fitid);
   return result.changes > 0;
+}
+
+export function transactionExists(
+  db: AntibudgetDb,
+  accountId: number,
+  fitid: string,
+): boolean {
+  const row = db
+    .prepare("SELECT 1 AS ok FROM transactions WHERE account_id = ? AND fitid = ?")
+    .get(accountId, fitid) as unknown as { ok: number } | undefined;
+  return row !== undefined;
 }
 
 export interface ApplyCategoryUpdate {

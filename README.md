@@ -43,6 +43,7 @@ npx antibudget set-category ACCT FITID CategoryName
 npx antibudget report monthly --month 2026-01
 npx antibudget report cashflow
 npx antibudget report uncategorized
+npx antibudget serve              # http://127.0.0.1:8080 — triage + reflection UI
 ```
 
 ## Privacy

@@ -35,6 +35,11 @@ export interface MultiHitRow {
   matchingCategories: string[];
 }
 
+function likePatternContains(raw: string): string {
+  const escaped = raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+  return `%${escaped}%`;
+}
+
 export function monthlyCategoryRollup(db: AntibudgetDb, month?: string): MonthlyCategoryRollupRow[] {
   const filter = month
     ? db.prepare(
@@ -88,7 +93,35 @@ export function monthlyIncomeExpenseSeries(db: AntibudgetDb): MonthlyCashflowRow
   return rows;
 }
 
-export function listUncategorizedTransactions(db: AntibudgetDb): UncategorizedRow[] {
+export function listUncategorizedTransactions(
+  db: AntibudgetDb,
+  payeeFilter?: string,
+): UncategorizedRow[] {
+  const trimmed = payeeFilter?.trim();
+  if (trimmed) {
+    const pattern = likePatternContains(trimmed);
+    return db
+      .prepare(
+        `
+    SELECT
+      a.acct_id AS acctId,
+      t.fitid AS fitid,
+      t.posted_at AS postedAt,
+      t.payee AS payee,
+      t.memo AS memo,
+      t.amount_cents AS amountCents
+    FROM transactions t
+    JOIN accounts a ON a.id = t.account_id
+    WHERE t.category_id IS NULL
+      AND (
+        t.payee LIKE ? ESCAPE '\\'
+        OR t.memo LIKE ? ESCAPE '\\'
+      )
+    ORDER BY t.posted_at, t.fitid
+  `,
+      )
+      .all(pattern, pattern) as unknown as UncategorizedRow[];
+  }
   return db
     .prepare(
       `
