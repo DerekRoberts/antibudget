@@ -275,6 +275,9 @@ export function insertTransactionFromHistory(
   db: AntibudgetDb,
   tx: InsertTransactionHistoryInput,
 ): boolean {
+  const categoryId = tx.categoryId ?? null;
+  const isManualOverride = tx.isManualOverride === true;
+  const isTransfer = tx.isTransfer === true;
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO transactions (
       account_id, fitid, fitid_hash, amount_cents, posted_at, payee, memo,
@@ -288,9 +291,9 @@ export function insertTransactionFromHistory(
     tx.postedAt,
     tx.payee,
     tx.memo,
-    tx.categoryId,
-    tx.isManualOverride ? 1 : 0,
-    tx.isTransfer ? 1 : 0,
+    categoryId,
+    isManualOverride ? 1 : 0,
+    isTransfer ? 1 : 0,
   );
   return result.changes > 0;
 }

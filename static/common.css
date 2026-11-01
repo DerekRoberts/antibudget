@@ -210,3 +210,10 @@ th {
   max-width: 28rem;
 }
 
+kbd {
+  font: inherit;
+  border: 1px solid #8886;
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+

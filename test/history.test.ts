@@ -12,7 +12,7 @@ import {
   handleUndo,
 } from "../src/api.js";
 import { resolvePaths } from "../src/config.js";
-import { countTransactions, listAllTransactions, openDatabase } from "../src/db.js";
+import { countTransactions, listAllTransactions, openDatabase, insertTransactionFromHistory } from "../src/db.js";
 import {
   getHistoryStatus,
   redoLedgerMutation,
@@ -95,6 +95,24 @@ test("undo ingest removes inserted transactions", () => {
   assert.equal(redo.applied, true);
   assert.ok(countTransactions(db2) > 0);
   db2.close();
+});
+
+test("insertTransactionFromHistory accepts legacy rows without classification", () => {
+  const paths = setupHomeWithIngest();
+  const db = openDatabase(paths.dbPath);
+  const account = db
+    .prepare("SELECT id FROM accounts WHERE acct_id = ?")
+    .get("checking-synth-001") as unknown as { id: number };
+  const inserted = insertTransactionFromHistory(db, {
+    accountId: account.id,
+    fitid: "legacy-redo-fitid",
+    amountCents: -100,
+    postedAt: "2026-01-15T12:00:00.000Z",
+    payee: "Legacy",
+    memo: null,
+  } as Parameters<typeof insertTransactionFromHistory>[1]);
+  assert.equal(inserted, true);
+  db.close();
 });
 
 test("undo ingest restores account ledger balance snapshot", () => {
