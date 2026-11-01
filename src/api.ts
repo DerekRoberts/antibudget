@@ -53,7 +53,6 @@ export async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
     const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
     total += buf.length;
     if (total > MAX_JSON_BODY_BYTES) {
-      req.destroy();
       throw new ApiError(413, "Request body too large");
     }
     chunks.push(buf);

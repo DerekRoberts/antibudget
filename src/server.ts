@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
-import http from "node:http";
+import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createApiContext, handleApiRequest } from "./api.js";
 import { resolvePaths } from "./config.js";
-import { openDatabase } from "./db.js";
+import { countTransactions, openDatabase } from "./db.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -74,15 +74,36 @@ function isLoopbackHost(hostname: string): boolean {
   return LOOPBACK_HOSTS.has(hostname.toLowerCase());
 }
 
-/** Ensures data dirs exist and the SQLite file is reachable before listening. */
-export function assertServePrerequisites(home?: string): void {
+function isAllowedRequestHost(req: IncomingMessage): boolean {
+  const hostHeader = req.headers.host;
+  if (!hostHeader) {
+    return true;
+  }
+  const hostname = hostHeader.split(":")[0] ?? "";
+  return isLoopbackHost(hostname);
+}
+
+/** Ensures data dirs exist and the SQLite file has ingested data before listening. */
+export async function assertServePrerequisites(home?: string): Promise<void> {
   const paths = resolvePaths({ home, createDirs: true });
+  let existedBeforeOpen = false;
   try {
-    openDatabase(paths.dbPath).close();
+    await fs.access(paths.dbPath);
+    existedBeforeOpen = true;
   } catch {
-    throw new Error(
-      `Cannot open database at ${paths.dbPath}. Run "antibudget ingest" first.`,
-    );
+    existedBeforeOpen = false;
+  }
+  const db = openDatabase(paths.dbPath);
+  try {
+    const txCount = countTransactions(db);
+    if (txCount === 0) {
+      const hint = existedBeforeOpen
+        ? `Database at ${paths.dbPath} has no transactions. Run "antibudget ingest" first.`
+        : `No database at ${paths.dbPath}. Run "antibudget ingest" first.`;
+      throw new Error(hint);
+    }
+  } finally {
+    db.close();
   }
 }
 
@@ -102,7 +123,7 @@ export function createAntibudgetServer(options: ServeOptions = {}): ServeResult 
         return;
       }
 
-      if (!isLoopbackHost(url.hostname)) {
+      if (!isAllowedRequestHost(req)) {
         res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
         res.end("Forbidden");
         return;
@@ -181,18 +202,19 @@ export function createAntibudgetServer(options: ServeOptions = {}): ServeResult 
 }
 
 export function startAntibudgetServer(options: ServeOptions = {}): Promise<ServeResult> {
-  assertServePrerequisites(options.home);
-  const created = createAntibudgetServer(options);
-  return new Promise((resolve, reject) => {
-    created.server.once("error", reject);
-    created.server.listen(created.port, created.host, () => {
-      created.server.removeListener("error", reject);
-      const addr = created.server.address();
-      if (addr && typeof addr === "object") {
-        created.port = addr.port;
-        created.url = `http://${created.host}:${created.port}`;
-      }
-      resolve(created);
+  return assertServePrerequisites(options.home).then(() => {
+    const created = createAntibudgetServer(options);
+    return new Promise<ServeResult>((resolve, reject) => {
+      created.server.once("error", reject);
+      created.server.listen(created.port, created.host, () => {
+        created.server.removeListener("error", reject);
+        const addr = created.server.address();
+        if (addr && typeof addr === "object") {
+          created.port = addr.port;
+          created.url = `http://${created.host}:${created.port}`;
+        }
+        resolve(created);
+      });
     });
   });
 }
