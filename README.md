@@ -84,6 +84,8 @@ podman compose up --build
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
 
+The fixture ingest above is a **demo dry run** into the persistent `antibudget-data` volume. Before importing real exports, reset demo data with `podman compose down -v` (recreates an empty volume on the next `up`).
+
 **Data:** `ANTIBUDGET_HOME` is `/data` in the container (see `compose.yml`). Drop real `.ofx`/`.qfx` into the volume’s `inbox/`, or uncomment the optional bind mount in `compose.yml` (read-write `:rw,z` so ingest can archive), then:
 
 ```bash
