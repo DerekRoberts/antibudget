@@ -84,8 +84,15 @@ function isRegularOfxFile(filePath: string): boolean {
   }
   try {
     return fs.statSync(filePath).isFile();
-  } catch {
-    return false;
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? (error as NodeJS.ErrnoException).code
+        : undefined;
+    if (code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 
