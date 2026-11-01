@@ -122,9 +122,11 @@ test("POST /api/ingest/upload ingests fixture and archives under ANTIBUDGET_HOME
     filesProcessed: number;
     transactionsInserted: number;
     transactionsSkipped: number;
+    errors: number;
   };
   assert.equal(result.filesProcessed, 1);
   assert.ok(result.transactionsInserted >= 1);
+  assert.equal(result.errors, 0);
 
   const db = openDatabase(paths.dbPath);
   assert.ok(countTransactions(db) >= 1);

@@ -13,7 +13,51 @@ export interface ParsedUploadFile {
   data: Buffer;
 }
 
-export interface IngestUploadResponse extends IngestResult {}
+export interface IngestUploadFileError {
+  filename: string;
+  message: string;
+}
+
+export interface IngestUploadResponse extends IngestResult {
+  errors: number;
+  fileErrors?: IngestUploadFileError[];
+}
+
+function errnoCode(err: unknown): string | undefined {
+  if (err && typeof err === "object" && "code" in err) {
+    return (err as NodeJS.ErrnoException).code;
+  }
+  return undefined;
+}
+
+function isSystemIoError(err: unknown): boolean {
+  const code = errnoCode(err);
+  return code === "EACCES" || code === "ENOSPC" || code === "EPERM" || code === "EIO";
+}
+
+function isParseIngestError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  const message = err.message;
+  return (
+    message.startsWith("OFX parse error:") ||
+    message.startsWith("Invalid TRNAMT") ||
+    message.startsWith("Invalid DTPOSTED") ||
+    message.startsWith("Invalid BALAMT") ||
+    message.includes("Ingest path is not an OFX/QFX file")
+  );
+}
+
+function publicFileErrorMessage(err: unknown): string {
+  if (isSystemIoError(err)) {
+    return "Import failed";
+  }
+  if (isParseIngestError(err)) {
+    return "Invalid or unreadable OFX/QFX export";
+  }
+  return "Import failed";
+}
 
 function parseContentTypeBoundary(contentType: string): string | null {
   const match = contentType.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
@@ -91,7 +135,6 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
   const files: ParsedUploadFile[] = [];
   const opening = Buffer.from(`--${boundary}`);
   const partDelimiter = Buffer.from(`\r\n--${boundary}`);
-  const closing = Buffer.from(`--${boundary}--`);
 
   if (!body.subarray(0, opening.length).equals(opening)) {
     return files;
@@ -103,9 +146,6 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
   }
 
   while (start < body.length) {
-    if (body.subarray(start, start + closing.length).equals(closing)) {
-      break;
-    }
     const headerEnd = body.indexOf("\r\n\r\n", start);
     if (headerEnd === -1) {
       break;
@@ -116,6 +156,8 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
     if (next === -1) {
       break;
     }
+    const afterDelimiter = next + partDelimiter.length;
+    const isClosing = body[afterDelimiter] === 45 && body[afterDelimiter + 1] === 45;
     const dataEnd = next;
     const disposition = headerBlock
       .split("\r\n")
@@ -126,7 +168,10 @@ export function parseMultipartFiles(body: Buffer, boundary: string): ParsedUploa
         files.push({ filename, data: body.subarray(dataStart, dataEnd) });
       }
     }
-    start = next + partDelimiter.length;
+    if (isClosing) {
+      break;
+    }
+    start = afterDelimiter;
     if (body[start] === 13 && body[start + 1] === 10) {
       start += 2;
     }
@@ -182,22 +227,57 @@ export function ingestUploadedFiles(
   validateUploadFilenames(files);
   fs.mkdirSync(paths.inbox, { recursive: true });
   const stagingDir = fs.mkdtempSync(path.join(paths.home, "upload-"));
+  const staged: { filename: string; filePath: string }[] = [];
   try {
     for (const file of files) {
       const name = uniqueBasename(stagingDir, path.basename(file.filename));
-      fs.writeFileSync(path.join(stagingDir, name), file.data);
+      const filePath = path.join(stagingDir, name);
+      fs.writeFileSync(filePath, file.data);
+      staged.push({ filename: file.filename, filePath });
     }
-    const result = ingestOfxPaths({ paths, sourcePath: stagingDir });
-    return result;
-  } catch (err) {
-    if (err instanceof ApiError) {
-      throw err;
+
+    let filesProcessed = 0;
+    let transactionsInserted = 0;
+    let transactionsSkipped = 0;
+    let errors = 0;
+    const fileErrors: IngestUploadFileError[] = [];
+    let hadSystemError = false;
+
+    for (const entry of staged) {
+      try {
+        const result = ingestOfxPaths({ paths, sourcePath: entry.filePath });
+        filesProcessed += result.filesProcessed;
+        transactionsInserted += result.transactionsInserted;
+        transactionsSkipped += result.transactionsSkipped;
+      } catch (err) {
+        errors += 1;
+        fileErrors.push({
+          filename: entry.filename,
+          message: publicFileErrorMessage(err),
+        });
+        if (isSystemIoError(err)) {
+          hadSystemError = true;
+        }
+      }
     }
-    const message = err instanceof Error ? err.message : String(err);
-    if (/OFX|QFX|parse|Ingest path is not/i.test(message)) {
-      throw new ApiError(422, "Invalid or unreadable OFX/QFX export");
+
+    if (filesProcessed === 0 && errors > 0) {
+      if (hadSystemError) {
+        throw new ApiError(500, "Import failed");
+      }
+      throw new ApiError(
+        422,
+        fileErrors[0]?.message ?? "Invalid or unreadable OFX/QFX export",
+      );
     }
-    throw new ApiError(500, "Import failed");
+
+    return {
+      filesProcessed,
+      transactionsInserted,
+      transactionsSkipped,
+      errors,
+      ...(fileErrors.length > 0 ? { fileErrors } : {}),
+    };
   } finally {
     try {
       fs.rmSync(stagingDir, { recursive: true, force: true });

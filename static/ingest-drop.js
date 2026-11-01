@@ -47,10 +47,13 @@ export function mountIngestDropZone(root, options = {}) {
       return;
     }
     if (files.length !== fileList.length) {
-      setStatus("Some files were skipped (only .ofx / .qfx are imported).", true);
-    } else {
-      setStatus("Importing…", false);
+      setStatus(
+        "Only .ofx and .qfx files are accepted. Remove other files and try again.",
+        true,
+      );
+      return;
     }
+    setStatus("Importing…", false);
     busy = true;
     zone.classList.add("drop-zone-busy");
     try {
@@ -67,11 +70,15 @@ export function mountIngestDropZone(root, options = {}) {
       const inserted = data.transactionsInserted ?? 0;
       const skipped = data.transactionsSkipped ?? 0;
       const processed = data.filesProcessed ?? 0;
-      setStatus(
-        `Imported ${processed} file(s): ${inserted} new transaction(s), ${skipped} duplicate(s).`,
-        false,
-      );
-      window.dispatchEvent(new CustomEvent("antibudget:ingested", { detail: data }));
+      const failed = data.errors ?? 0;
+      let message = `Imported ${processed} file(s): ${inserted} new transaction(s), ${skipped} duplicate(s).`;
+      if (failed > 0) {
+        message += ` ${failed} file(s) failed.`;
+      }
+      setStatus(message, failed > 0);
+      if (processed > 0 || inserted > 0) {
+        window.dispatchEvent(new CustomEvent("antibudget:ingested", { detail: data }));
+      }
     } catch (err) {
       setStatus(String(err), true);
     } finally {

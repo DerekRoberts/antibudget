@@ -150,11 +150,17 @@ async function loadTransactions() {
         await syncEmptyLedgerDropZone(transactionCount);
       }
 <<<<<<< HEAD
+<<<<<<< HEAD
       if (generation !== loadGeneration) {
         return;
       }
 =======
 >>>>>>> c444087 (fix(api): harden upload path and address review feedback)
+=======
+      if (generation !== loadGeneration) {
+        return;
+      }
+>>>>>>> 6cdc5c6 (fix(upload): tighten origin checks and per-file ingest results)
       td.textContent =
         transactionCount === null
           ? "No uncategorized transactions to show."
