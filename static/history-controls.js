@@ -25,17 +25,12 @@ export function mountHistoryControls(container) {
 
   /** @type {HistoryStatus | null} */
   let lastStatus = null;
+  let historyActionInFlight = false;
 
-  async function refreshStatus() {
-    const res = await fetch("/api/history/status");
-    if (!res.ok) {
-      return;
-    }
-    /** @type {HistoryStatus} */
-    const status = await res.json();
+  function applyStatus(status) {
     lastStatus = status;
-    undoBtn.disabled = !status.canUndo;
-    redoBtn.disabled = !status.canRedo;
+    undoBtn.disabled = !status.canUndo || historyActionInFlight;
+    redoBtn.disabled = !status.canRedo || historyActionInFlight;
     const parts = [];
     if (status.canUndo && status.undoLabel) {
       parts.push(`Undo: ${status.undoLabel}`);
@@ -44,6 +39,16 @@ export function mountHistoryControls(container) {
       parts.push(`Redo: ${status.redoLabel}`);
     }
     hint.textContent = parts.join(" · ");
+  }
+
+  async function refreshStatus() {
+    const res = await fetch("/api/history/status");
+    if (!res.ok) {
+      return;
+    }
+    /** @type {HistoryStatus} */
+    const status = await res.json();
+    applyStatus(status);
   }
 
   async function postMutation(path) {
@@ -58,26 +63,41 @@ export function mountHistoryControls(container) {
     );
   }
 
-  async function runUndo() {
-    const result = await postMutation("/api/history/undo");
-    if (!result?.applied) {
+  async function runHistoryAction(path, action) {
+    if (historyActionInFlight) {
       return;
     }
-    await refreshStatus();
-    window.dispatchEvent(
-      new CustomEvent("antibudget:history-changed", { detail: { action: "undo", kind: result.kind } }),
-    );
+    historyActionInFlight = true;
+    undoBtn.disabled = true;
+    redoBtn.disabled = true;
+    try {
+      const result = await postMutation(path);
+      if (!result?.applied) {
+        return;
+      }
+      if (result.status) {
+        applyStatus(result.status);
+      }
+      window.dispatchEvent(
+        new CustomEvent("antibudget:history-changed", {
+          detail: { action, kind: result.kind },
+        }),
+      );
+      await refreshStatus();
+    } finally {
+      historyActionInFlight = false;
+      if (lastStatus) {
+        applyStatus(lastStatus);
+      }
+    }
+  }
+
+  async function runUndo() {
+    await runHistoryAction("/api/history/undo", "undo");
   }
 
   async function runRedo() {
-    const result = await postMutation("/api/history/redo");
-    if (!result?.applied) {
-      return;
-    }
-    await refreshStatus();
-    window.dispatchEvent(
-      new CustomEvent("antibudget:history-changed", { detail: { action: "redo", kind: result.kind } }),
-    );
+    await runHistoryAction("/api/history/redo", "redo");
   }
 
   undoBtn.addEventListener("click", () => {

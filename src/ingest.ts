@@ -171,7 +171,9 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
     if (recordHistory && accountBalancesBefore) {
       const rows = loadStoredTransactionRows(db, insertedKeys);
       const accountBalancesAfter = listAccountBalanceSnapshots(db);
-      recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
+      runInTransaction(db, () => {
+        recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
+      });
     }
 
     return {

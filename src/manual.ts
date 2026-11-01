@@ -4,6 +4,7 @@ import {
   getOrCreateCategory,
   getTransactionClassification,
   openDatabase,
+  runInTransaction,
   setTransactionCategoryManual,
   type AntibudgetDb,
 } from "./db.js";
@@ -30,18 +31,21 @@ export function setManualTransactionCategoryInDb(
     throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
   }
   const categoryId = getOrCreateCategory(db, options.categoryName);
-  const updated = setTransactionCategoryManual(db, account.id, options.fitid, categoryId);
-  if (!updated) {
-    throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
-  }
-  if (options.recordHistory !== false) {
-    const after = getTransactionClassification(db, account.id, options.fitid);
-    if (!after) {
+  let updated = false;
+  runInTransaction(db, () => {
+    updated = setTransactionCategoryManual(db, account.id, options.fitid, categoryId);
+    if (!updated) {
       throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
     }
-    recordCategoryHistory(db, account.id, options.fitid, before, after);
-  }
-  return true;
+    if (options.recordHistory !== false) {
+      const after = getTransactionClassification(db, account.id, options.fitid);
+      if (!after) {
+        throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
+      }
+      recordCategoryHistory(db, account.id, options.fitid, before, after);
+    }
+  });
+  return updated;
 }
 
 export function setManualTransactionCategory(options: SetCategoryOptions): boolean {
