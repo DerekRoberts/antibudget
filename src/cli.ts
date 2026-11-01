@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     const result = categorizeTransactions({ paths, createDefaultRules: initRules });
     if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
       console.error(
-        `No rules.yaml at ${paths.rulesPath}. Copy fixtures/rules.example.yaml to that path and edit payees before ingest (ingest applies rules when the file exists). On an empty DB, "antibudget categorize --init-rules" also creates a starter file.`,
+        `No rules.yaml at ${paths.rulesPath}. From a git checkout, copy fixtures/rules.example.yaml there and edit payees before ingest (ingest auto-categorizes when the file exists). From npm, run "antibudget categorize --init-rules" to write built-in starter rules, then edit before ingest.`,
       );
     }
     console.log(JSON.stringify(result, null, 2));
