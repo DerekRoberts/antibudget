@@ -40,6 +40,19 @@ Environment:
 const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const REPORT_KINDS = new Set(["monthly", "cashflow", "uncategorized", "triage"]);
 
+function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
+  return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
+}
+
+function assertReportDatabaseReady(paths: ReturnType<typeof resolvePaths>): void {
+  if (!fs.existsSync(paths.home)) {
+    throw new Error(noTransactionsGuidance(paths));
+  }
+  if (!fs.existsSync(paths.dbPath)) {
+    throw new Error(noTransactionsGuidance(paths));
+  }
+}
+
 function parseReportArgs(args: string[]): { kind: string; month?: string } {
   const kind = args[1];
   if (!kind) {
@@ -104,7 +117,7 @@ async function main(): Promise<void> {
     const result = categorizeTransactions({ paths, createDefaultRules: initRules });
     if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
       console.error(
-        `No rules.yaml at ${paths.rulesPath}. Run "antibudget categorize --init-rules" to create starter rules from the repo example (when installed from git) or the built-in template.`,
+        `No rules.yaml at ${paths.rulesPath}. Copy fixtures/rules.example.yaml to that path and edit payees before ingest (ingest applies rules when the file exists). On an empty DB, "antibudget categorize --init-rules" also creates a starter file.`,
       );
     }
     console.log(JSON.stringify(result, null, 2));
@@ -130,12 +143,11 @@ async function main(): Promise<void> {
       throw new Error(`Unknown report subcommand: ${kind}`);
     }
     const paths = resolvePaths({ createDirs: false });
+    assertReportDatabaseReady(paths);
     const db = openDatabase(paths.dbPath);
     try {
       if (countTransactions(db) === 0) {
-        throw new Error(
-          `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`,
-        );
+        throw new Error(noTransactionsGuidance(paths));
       }
       if (kind === "monthly") {
         printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
@@ -149,11 +161,7 @@ async function main(): Promise<void> {
         printUncategorized(listUncategorizedTransactions(db));
         return;
       }
-      if (kind === "triage") {
-        printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
-        return;
-      }
-      throw new Error(`Unknown report subcommand: ${kind}`);
+      printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
     } finally {
       db.close();
     }

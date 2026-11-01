@@ -30,17 +30,17 @@ npm run build
 
 export ANTIBUDGET_HOME="$HOME/antibudget-data"   # or your Drive symlink
 mkdir -p "$ANTIBUDGET_HOME/inbox"
+cp fixtures/rules.example.yaml "$ANTIBUDGET_HOME/rules.yaml"
+# Edit rules.yaml for your payees before ingesting (ingest auto-categorizes when rules exist)
 # Copy real exports into inbox/ (not into the repo)
 
 npx antibudget ingest
-npx antibudget categorize --init-rules   # writes rules.yaml from fixtures/rules.example.yaml
-# Edit $ANTIBUDGET_HOME/rules.yaml for your payees, then:
-npx antibudget categorize
+npx antibudget categorize              # re-apply after rule edits
 
 npx antibudget serve                     # http://127.0.0.1:8080 (127.0.0.1 only)
 ```
 
-If ingest finds no files, it prints where to drop `.ofx`/`.qfx`. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, run `categorize --init-rules` or copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml`.
+If ingest finds no files, it prints where to drop `.ofx`/`.qfx`. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
 
 ### Data directory
 
