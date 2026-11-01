@@ -79,7 +79,8 @@ function loadEvent(
 
 function appendEvent(db: AntibudgetDb, kind: HistoryKind, payload: unknown): number {
   const cursor = getCursorId(db);
-  if (cursor > 0) {
+  const maxId = maxHistoryId(db);
+  if (maxId > cursor) {
     db.prepare("DELETE FROM ledger_history WHERE id > ?").run(cursor);
   }
   const insert = db.prepare("INSERT INTO ledger_history (kind, payload) VALUES (?, ?)");
@@ -168,7 +169,7 @@ export function getHistoryStatus(db: AntibudgetDb): HistoryStatus {
   const cursor = getCursorId(db);
   const maxId = maxHistoryId(db);
   const canUndo = cursor > 0;
-  const canRedo = cursor > 0 && cursor < maxId;
+  const canRedo = cursor < maxId;
   let undoLabel: string | null = null;
   let redoLabel: string | null = null;
   if (canUndo) {

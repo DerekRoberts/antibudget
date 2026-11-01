@@ -97,6 +97,38 @@ test("undo ingest removes inserted transactions", () => {
   db2.close();
 });
 
+test("new mutation after undo-all clears abandoned history branch", () => {
+  const paths = setupHomeWithIngest();
+  const db = openDatabase(paths.dbPath);
+  const txs = listAllTransactions(db).filter((t) => t.categoryId === null);
+  assert.ok(txs.length >= 2);
+  setManualTransactionCategoryInDb(db, {
+    acctId: txs[0].acctId,
+    fitid: txs[0].fitid,
+    categoryName: "A",
+  });
+  setManualTransactionCategoryInDb(db, {
+    acctId: txs[1].acctId,
+    fitid: txs[1].fitid,
+    categoryName: "B",
+  });
+  undoLedgerMutation(db);
+  undoLedgerMutation(db);
+  assert.equal(getHistoryStatus(db).canRedo, true);
+  setManualTransactionCategoryInDb(db, {
+    acctId: txs[0].acctId,
+    fitid: txs[0].fitid,
+    categoryName: "C",
+  });
+  assert.equal(getHistoryStatus(db).canRedo, false);
+  const undo = undoLedgerMutation(db);
+  assert.equal(undo.applied, true);
+  assert.equal(undo.kind, "category");
+  const rowB = listAllTransactions(db).find((t) => t.fitid === txs[1].fitid);
+  assert.equal(rowB?.categoryName, null);
+  db.close();
+});
+
 test("new mutation clears redo branch", () => {
   const paths = setupHomeWithIngest();
   const db = openDatabase(paths.dbPath);
