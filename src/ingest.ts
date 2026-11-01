@@ -78,6 +78,11 @@ function isOfxExtension(filePath: string): boolean {
   return OFX_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
+/** True when the basename looks like an OFX/QFX export (upload validation). */
+export function isOfxUploadFilename(filename: string): boolean {
+  return isOfxExtension(path.basename(filename));
+}
+
 function isRegularOfxFile(filePath: string): boolean {
   if (!isOfxExtension(filePath)) {
     return false;

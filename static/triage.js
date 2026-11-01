@@ -93,21 +93,28 @@ function emptyUncategorizedMessage(payeeFilter, transactionCount) {
     return "No uncategorized transactions match this payee filter.";
   }
   if (transactionCount === 0) {
-    return "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+    return "No transactions yet. Drop .ofx or .qfx exports above to import, then triage here.";
   }
   return "No uncategorized transactions — everything in the ledger is categorized.";
 }
 
 async function ledgerTransactionCount() {
-  try {
-    const res = await fetch("/api/ledger/meta");
-    if (!res.ok) {
-      return null;
+  const { fetchLedgerTransactionCount } = await import("/ingest-drop.js");
+  return fetchLedgerTransactionCount();
+}
+
+async function syncEmptyLedgerDropZone(transactionCount) {
+  const wrap = document.getElementById("ingest-drop-wrap");
+  if (!wrap) return;
+  if (transactionCount === 0) {
+    wrap.hidden = false;
+    if (!wrap.dataset.mounted) {
+      const { mountIngestDropZone } = await import("/ingest-drop.js");
+      mountIngestDropZone(wrap, { compact: true });
+      wrap.dataset.mounted = "true";
     }
-    const data = await res.json();
-    return typeof data.transactionCount === "number" ? data.transactionCount : null;
-  } catch {
-    return null;
+  } else {
+    wrap.hidden = true;
   }
 }
 
@@ -139,6 +146,12 @@ async function loadTransactions() {
       if (generation !== loadGeneration) {
         return;
       }
+      if (transactionCount !== null) {
+        await syncEmptyLedgerDropZone(transactionCount);
+      }
+      if (generation !== loadGeneration) {
+        return;
+      }
       td.textContent =
         transactionCount === null
           ? "No uncategorized transactions to show."
@@ -149,6 +162,8 @@ async function loadTransactions() {
     updateCount();
     return;
   }
+  const wrap = document.getElementById("ingest-drop-wrap");
+  if (wrap) wrap.hidden = true;
   for (const tx of data.transactions) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -181,6 +196,18 @@ async function init() {
   });
   document.getElementById("payee-filter")?.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") void loadTransactions();
+  });
+  window.addEventListener("antibudget:ingested", (ev) => {
+    const failed = ev.detail?.errors ?? 0;
+    if (failed > 0) {
+      window.alert(`${failed} file(s) failed to import. Other files were imported.`);
+    }
+    void loadCategories()
+      .then(() => loadTransactions())
+      .catch((err) => {
+        console.error(err);
+        window.alert(String(err));
+      });
   });
 }
 
