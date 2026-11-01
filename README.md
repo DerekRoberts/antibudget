@@ -70,6 +70,30 @@ npx antibudget report uncategorized
 npx antibudget serve              # http://127.0.0.1:8080 — triage + reflection UI
 ```
 
+## Local with Podman / Docker Compose
+
+From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8080** only):
+
+```bash
+podman compose up --build
+# or: docker compose up --build
+```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080). On first run, ingest once into the named volume `antibudget-data`:
+
+```bash
+podman compose run --rm dev ingest /app/fixtures/sample.ofx
+podman compose up
+```
+
+**Data:** `ANTIBUDGET_HOME` is `/data` in the container (see `compose.yml`). Drop real `.ofx`/`.qfx` into the volume’s `inbox/`, or uncomment the optional bind mount in `compose.yml` (uses `:z` for Podman SELinux), then:
+
+```bash
+podman compose run --rm dev ingest
+```
+
+Other CLI commands: `podman compose run --rm dev categorize`, etc. Use **`fixtures/`** only for synthetic data in git — never commit real exports.
+
 ## Privacy
 
 This repository is public and educational. Use only **`fixtures/sample.ofx`** in git. Keep real financial exports and databases on your machine.

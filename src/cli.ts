@@ -30,7 +30,7 @@ function printUsage(): void {
   antibudget report cashflow
   antibudget report uncategorized
   antibudget report triage
-  antibudget serve [--port PORT]
+  antibudget serve [--port PORT] [--host HOST]
 
 Environment:
   ANTIBUDGET_HOME   Override data directory (default: OS user data path)
@@ -184,6 +184,7 @@ async function main(): Promise<void> {
 
   if (command === "serve") {
     let port = 8080;
+    let host = "127.0.0.1";
     for (let i = 1; i < args.length; i += 1) {
       if (args[i] === "--port") {
         const value = args[i + 1];
@@ -199,9 +200,16 @@ async function main(): Promise<void> {
         }
         port = parsed;
         i += 1;
+      } else if (args[i] === "--host") {
+        const value = args[i + 1];
+        if (!value || value.startsWith("-")) {
+          throw new Error("--host requires a hostname or address");
+        }
+        host = value;
+        i += 1;
       }
     }
-    const started = await startAntibudgetServer({ host: "127.0.0.1", port });
+    const started = await startAntibudgetServer({ host, port });
     console.log(`antibudget UI at ${started.url} (localhost only)`);
     console.log("Press Ctrl+C to stop.");
     return;
