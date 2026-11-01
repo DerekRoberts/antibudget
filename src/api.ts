@@ -49,14 +49,29 @@ export async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
 
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of req) {
-    const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
-    total += buf.length;
-    if (total > MAX_JSON_BODY_BYTES) {
-      throw new ApiError(413, "Request body too large");
-    }
-    chunks.push(buf);
+  let rejected: ApiError | undefined;
+
+  await new Promise<void>((resolve, reject) => {
+    req.on("data", (chunk: Buffer | string) => {
+      if (rejected) {
+        return;
+      }
+      const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+      total += buf.length;
+      if (total > MAX_JSON_BODY_BYTES) {
+        rejected = new ApiError(413, "Request body too large");
+        return;
+      }
+      chunks.push(buf);
+    });
+    req.on("end", () => resolve());
+    req.on("error", (err) => reject(err));
+  });
+
+  if (rejected) {
+    throw rejected;
   }
+
   const text = Buffer.concat(chunks).toString("utf8").trim();
   if (!text) {
     throw new ApiError(400, "Request body required");

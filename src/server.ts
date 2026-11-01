@@ -74,13 +74,20 @@ function isLoopbackHost(hostname: string): boolean {
   return LOOPBACK_HOSTS.has(hostname.toLowerCase());
 }
 
+function hostHeaderHostname(hostHeader: string): string {
+  try {
+    return new URL(`http://${hostHeader}`).hostname;
+  } catch {
+    return hostHeader.split(":")[0] ?? "";
+  }
+}
+
 function isAllowedRequestHost(req: IncomingMessage): boolean {
   const hostHeader = req.headers.host;
   if (!hostHeader) {
     return true;
   }
-  const hostname = hostHeader.split(":")[0] ?? "";
-  return isLoopbackHost(hostname);
+  return isLoopbackHost(hostHeaderHostname(hostHeader));
 }
 
 /** Ensures data dirs exist and the SQLite file has ingested data before listening. */
