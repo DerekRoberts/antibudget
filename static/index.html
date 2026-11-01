@@ -15,9 +15,23 @@
       </nav>
     </header>
     <p>Local cashflow views for your SQLite ledger. Start with uncategorized transactions, then review monthly rollups.</p>
+    <p class="status" id="getting-started">
+      New ledger? Drop bank exports in your data-dir <code>inbox/</code>, then run
+      <code>antibudget ingest</code>.
+    </p>
     <ul>
       <li><a href="/triage">Quick Triage</a> — categorize uncategorized rows (keyboard-friendly table).</li>
       <li><a href="/reflection">Reflection</a> — monthly category breakdown and income vs expense trend.</li>
     </ul>
+    <script type="module">
+      fetch("/api/ledger/meta")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.transactionCount > 0) {
+            document.getElementById("getting-started")?.remove();
+          }
+        })
+        .catch(() => {});
+    </script>
   </body>
 </html>

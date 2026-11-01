@@ -51,7 +51,7 @@ cp fixtures/rules.example.yaml "$ANTIBUDGET_HOME/rules.yaml"
 node --experimental-sqlite dist/src/cli.js ingest
 node --experimental-sqlite dist/src/cli.js categorize   # re-apply after rule edits
 
-node --experimental-sqlite dist/src/cli.js serve          # http://127.0.0.1:8080 (127.0.0.1 only)
+node --experimental-sqlite dist/src/cli.js serve          # http://127.0.0.1:8080 (127.0.0.1 only; creates an empty DB if needed)
 ```
 
 Ingest all `.ofx`/`.qfx` in a folder (non-recursive; `~` expands to your home directory). Processed files are moved into `$ANTIBUDGET_HOME/archive`:
@@ -62,7 +62,7 @@ node --experimental-sqlite dist/src/cli.js ingest ~/Documents
 
 Use `--recursive` to include subfolders. Shell-style globs work when the path contains `*`, `?`, or a `[...]` character class — quote the pattern so the shell does not expand it first (for example `'~/Downloads/*.qfx'`).
 
-If ingest finds no files, it prints where to drop exports or which path was scanned. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
+If ingest finds no files, it prints where to drop exports or which path was scanned. **`serve` creates the data directory layout and an empty SQLite database when none exists yet**, so you can open the UI before your first OFX import; the triage page explains how to ingest. **Reports and other transaction-dependent CLI commands** (not `ingest` or `categorize --init-rules`) still require at least one ingested transaction. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
 
 ### Data directory
 
@@ -96,11 +96,12 @@ node --experimental-sqlite dist/src/cli.js serve
 
 From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8080** only).
 
-**First run** (empty data volume — ingest before `serve` will start):
+**First run** (empty data volume — `serve` / `compose up` creates an empty DB; ingest when you have exports):
 
 ```bash
-podman compose run --build --rm dev ingest /app/fixtures/sample.ofx
 podman compose up --build
+# optional demo data first:
+# podman compose run --build --rm dev ingest /app/fixtures/sample.ofx
 # or: docker compose up --build
 ```
 

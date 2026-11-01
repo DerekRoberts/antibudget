@@ -80,11 +80,39 @@ async function onCategoryChange(select) {
 function updateCount() {
   const tbody = document.getElementById("triage-body");
   const count = document.getElementById("count");
-  const n = tbody?.querySelectorAll("tr").length ?? 0;
+  const n =
+    tbody?.querySelectorAll("tr:not([data-placeholder])").length ?? 0;
   if (count) count.textContent = `${n} uncategorized`;
 }
 
+/** @type {number} */
+let loadGeneration = 0;
+
+function emptyUncategorizedMessage(payeeFilter, transactionCount) {
+  if (payeeFilter) {
+    return "No uncategorized transactions match this payee filter.";
+  }
+  if (transactionCount === 0) {
+    return "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+  }
+  return "No uncategorized transactions — everything in the ledger is categorized.";
+}
+
+async function ledgerTransactionCount() {
+  try {
+    const res = await fetch("/api/ledger/meta");
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
+    return typeof data.transactionCount === "number" ? data.transactionCount : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadTransactions() {
+  const generation = ++loadGeneration;
   const filter = document.getElementById("payee-filter");
   const params = new URLSearchParams();
   const q = filter instanceof HTMLInputElement ? filter.value.trim() : "";
@@ -92,9 +120,35 @@ async function loadTransactions() {
   const res = await fetch(`/api/transactions/uncategorized?${params}`);
   if (!res.ok) throw new Error("Failed to load transactions");
   const data = await res.json();
+  if (generation !== loadGeneration) {
+    return;
+  }
   const tbody = document.getElementById("triage-body");
   if (!tbody) return;
   tbody.replaceChildren();
+  if (data.transactions.length === 0) {
+    const tr = document.createElement("tr");
+    tr.dataset.placeholder = "true";
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "status";
+    if (q) {
+      td.textContent = emptyUncategorizedMessage(q, 0);
+    } else {
+      const transactionCount = await ledgerTransactionCount();
+      if (generation !== loadGeneration) {
+        return;
+      }
+      td.textContent =
+        transactionCount === null
+          ? "No uncategorized transactions to show."
+          : emptyUncategorizedMessage(null, transactionCount);
+    }
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    updateCount();
+    return;
+  }
   for (const tx of data.transactions) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
