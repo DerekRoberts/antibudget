@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { categorizeTransactions } from "./categorize.js";
 import { resolvePaths } from "./config.js";
-import { openDatabase } from "./db.js";
+import { countTransactions, openDatabase } from "./db.js";
 import { ingestOfxPaths } from "./ingest.js";
 import { setManualTransactionCategory } from "./manual.js";
 import {
@@ -38,11 +38,29 @@ Environment:
 }
 
 const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const REPORT_KINDS = ["monthly", "cashflow", "uncategorized", "triage"] as const;
+type ReportKind = (typeof REPORT_KINDS)[number];
+const REPORT_KIND_SET = new Set<string>(REPORT_KINDS);
+
+function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
+  return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
+}
+
+function assertReportDatabaseReady(paths: ReturnType<typeof resolvePaths>): void {
+  if (!fs.existsSync(paths.home)) {
+    throw new Error(noTransactionsGuidance(paths));
+  }
+  if (!fs.existsSync(paths.dbPath)) {
+    throw new Error(noTransactionsGuidance(paths));
+  }
+}
 
 function parseReportArgs(args: string[]): { kind: string; month?: string } {
   const kind = args[1];
   if (!kind) {
-    throw new Error("report requires a subcommand: monthly, cashflow, uncategorized, triage");
+    throw new Error(
+      `report requires a subcommand: ${REPORT_KINDS.join(", ")}`,
+    );
   }
   let month: string | undefined;
   for (let i = 2; i < args.length; i += 1) {
@@ -74,6 +92,12 @@ async function main(): Promise<void> {
     const sourcePath = args[1] ? path.resolve(args[1]) : undefined;
     const paths = resolvePaths({ createDirs: true });
     const result = ingestOfxPaths({ paths, sourcePath });
+    if (result.filesProcessed === 0) {
+      const target = sourcePath ?? paths.inbox;
+      console.error(
+        `No .ofx or .qfx files found in ${target}. Drop bank exports there or pass a file path.`,
+      );
+    }
     console.log(
       JSON.stringify(
         {
@@ -94,7 +118,16 @@ async function main(): Promise<void> {
   if (command === "categorize") {
     const initRules = args.includes("--init-rules");
     const paths = resolvePaths({ createDirs: true });
-    const result = categorizeTransactions({ paths, createDefaultRules: initRules });
+    const result = categorizeTransactions({
+      paths,
+      createDefaultRules: initRules,
+      initRulesOnly: initRules,
+    });
+    if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
+      console.error(
+        `No rules.yaml at ${paths.rulesPath}. From a git checkout, copy fixtures/rules.example.yaml there and edit payees before ingest (ingest auto-categorizes when the file exists). From npm, run "antibudget categorize --init-rules" to write built-in starter rules, then edit before ingest.`,
+      );
+    }
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -114,29 +147,39 @@ async function main(): Promise<void> {
 
   if (command === "report") {
     const { kind, month } = parseReportArgs(args);
+    if (!REPORT_KIND_SET.has(kind)) {
+      throw new Error(`Unknown report subcommand: ${kind}`);
+    }
     const paths = resolvePaths({ createDirs: false });
+    assertReportDatabaseReady(paths);
     const db = openDatabase(paths.dbPath);
     try {
-      if (kind === "monthly") {
-        printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
-        return;
+      if (countTransactions(db) === 0) {
+        throw new Error(noTransactionsGuidance(paths));
       }
-      if (kind === "cashflow") {
-        printCashflowSeries(monthlyIncomeExpenseSeries(db));
-        return;
+      const reportKind = kind as ReportKind;
+      switch (reportKind) {
+        case "monthly":
+          printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
+          break;
+        case "cashflow":
+          printCashflowSeries(monthlyIncomeExpenseSeries(db));
+          break;
+        case "uncategorized":
+          printUncategorized(listUncategorizedTransactions(db));
+          break;
+        case "triage":
+          printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
+          break;
+        default: {
+          const _exhaustive: never = reportKind;
+          throw new Error(`Unknown report subcommand: ${_exhaustive}`);
+        }
       }
-      if (kind === "uncategorized") {
-        printUncategorized(listUncategorizedTransactions(db));
-        return;
-      }
-      if (kind === "triage") {
-        printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
-        return;
-      }
-      throw new Error(`Unknown report subcommand: ${kind}`);
     } finally {
       db.close();
     }
+    return;
   }
 
   if (command === "serve") {

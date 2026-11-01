@@ -86,9 +86,18 @@ function resolveIngestFiles(paths: AntibudgetPaths, sourcePath?: string): string
     return listOfxFiles(paths.inbox);
   }
   const resolved = path.resolve(sourcePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Ingest path not found: ${resolved}`);
+  }
   const stat = fs.statSync(resolved);
   if (stat.isDirectory()) {
     return listOfxFiles(resolved);
+  }
+  const ext = path.extname(resolved).toLowerCase();
+  if (!OFX_EXTENSIONS.has(ext)) {
+    throw new Error(
+      `Ingest path is not an OFX/QFX file: ${resolved} (expected .ofx or .qfx)`,
+    );
   }
   return [resolved];
 }

@@ -28,6 +28,16 @@ function setupHomeWithoutRules(): ReturnType<typeof resolvePaths> {
   return paths;
 }
 
+test("startAntibudgetServer rejects empty database", async () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-m3-empty-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  openDatabase(paths.dbPath).close();
+  await assert.rejects(
+    () => startAntibudgetServer({ home: paths.home, port: 0 }),
+    /ingest/,
+  );
+});
+
 test("startAntibudgetServer binds localhost and serves triage page", async () => {
   const paths = setupHomeWithoutRules();
   const started = await startAntibudgetServer({ home: paths.home, port: 0 });

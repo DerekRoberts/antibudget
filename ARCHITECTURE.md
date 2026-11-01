@@ -4,6 +4,8 @@
 
 Local-first cashflow tracking from recurring OFX/QFX dumps. Milestone 1 covers storage, parsing, and idempotent CLI ingest. Later milestones add rules, SQL rollups, and a localhost UI.
 
+**Runtime:** Node **22.5+** (SQLite built-in); CI and dry-run testing target **Node 25**.
+
 ## Data directory layout
 
 Resolved by `src/config.ts` (default under OS user data; override `ANTIBUDGET_HOME`):
