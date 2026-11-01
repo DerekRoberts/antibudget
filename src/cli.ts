@@ -225,7 +225,7 @@ async function main(): Promise<void> {
         i += 1;
       }
     }
-    if (!isLoopbackBindHost(host)) {
+    if (!isLoopbackBindHost(host) && host !== "0.0.0.0" && host !== "::") {
       console.error(
         "Warning: binding to a non-loopback address; Host-header checks are not an authentication boundary.",
       );
