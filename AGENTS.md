@@ -29,4 +29,4 @@
 
 ## Out of scope unless explicitly requested
 
-Web UI, Sankey, net worth, Age of Money, transaction splits, Flatpak/Tauri packaging, bank APIs, importing real user OFX into the repo.
+Transaction splits, Flatpak/Tauri packaging, bank APIs, importing real user OFX into the repo, remote deployment of the UI, YNAB import, envelope budgeting.

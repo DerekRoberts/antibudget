@@ -19,6 +19,8 @@ import {
   printUncategorized,
 } from "./reports.js";
 
+import { startAntibudgetServer } from "./server.js";
+
 function printUsage(): void {
   console.error(`Usage:
   antibudget ingest [file-or-directory]
@@ -28,6 +30,7 @@ function printUsage(): void {
   antibudget report cashflow
   antibudget report uncategorized
   antibudget report triage
+  antibudget serve [--port PORT]
 
 Environment:
   ANTIBUDGET_HOME   Override data directory (default: OS user data path)
@@ -134,6 +137,27 @@ async function main(): Promise<void> {
     } finally {
       db.close();
     }
+  }
+
+  if (command === "serve") {
+    let port = 8080;
+    for (let i = 1; i < args.length; i += 1) {
+      if (args[i] === "--port") {
+        const value = args[i + 1];
+        if (!value || value.startsWith("-")) {
+          throw new Error("--port requires a number");
+        }
+        port = Number.parseInt(value, 10);
+        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+          throw new Error(`Invalid --port: ${value}`);
+        }
+        i += 1;
+      }
+    }
+    const started = await startAntibudgetServer({ host: "127.0.0.1", port });
+    console.log(`antibudget UI at ${started.url} (localhost only)`);
+    console.log("Press Ctrl+C to stop.");
+    return;
   }
 
   console.error(`Unknown command: ${command}`);

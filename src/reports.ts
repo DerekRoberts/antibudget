@@ -88,7 +88,35 @@ export function monthlyIncomeExpenseSeries(db: AntibudgetDb): MonthlyCashflowRow
   return rows;
 }
 
-export function listUncategorizedTransactions(db: AntibudgetDb): UncategorizedRow[] {
+export function listUncategorizedTransactions(
+  db: AntibudgetDb,
+  payeeFilter?: string,
+): UncategorizedRow[] {
+  const trimmed = payeeFilter?.trim();
+  if (trimmed) {
+    const pattern = `%${trimmed.replace(/[%_]/g, "")}%`;
+    return db
+      .prepare(
+        `
+    SELECT
+      a.acct_id AS acctId,
+      t.fitid AS fitid,
+      t.posted_at AS postedAt,
+      t.payee AS payee,
+      t.memo AS memo,
+      t.amount_cents AS amountCents
+    FROM transactions t
+    JOIN accounts a ON a.id = t.account_id
+    WHERE t.category_id IS NULL
+      AND (
+        t.payee LIKE ? COLLATE NOCASE
+        OR t.memo LIKE ? COLLATE NOCASE
+      )
+    ORDER BY t.posted_at, t.fitid
+  `,
+      )
+      .all(pattern, pattern) as unknown as UncategorizedRow[];
+  }
   return db
     .prepare(
       `

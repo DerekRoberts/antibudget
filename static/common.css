@@ -1,0 +1,155 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  line-height: 1.4;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 1rem 1.25rem 2rem;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #8884;
+  padding-bottom: 0.75rem;
+}
+
+header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+nav a {
+  margin-right: 1rem;
+}
+
+nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 1rem;
+}
+
+input[type="search"],
+select {
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid #8884;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: Canvas;
+}
+
+.amount-negative {
+  color: #b00020;
+}
+
+.amount-positive {
+  color: #0a7a2f;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  border: 1px solid #8884;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  min-width: 10rem;
+}
+
+.card h2 {
+  font-size: 0.85rem;
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.card .value {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.card .note {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-top: 0.35rem;
+}
+
+.chart-wrap {
+  margin: 1.5rem 0;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 5rem 1fr 5rem;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.bar-track {
+  background: #8882;
+  border-radius: 3px;
+  height: 1.1rem;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #3366cc;
+}
+
+.bar-fill.expense {
+  background: #b00020;
+}
+
+.sankey {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.status {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+kbd {
+  font: inherit;
+  border: 1px solid #8886;
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}

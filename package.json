@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r static dist/static",
     "test": "npm run build && node --experimental-sqlite --test \"dist/test/**/*.test.js\"",
     "prepack": "npm run build"
   },

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Triage — antibudget</title>
+    <link rel="stylesheet" href="/common.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Quick Triage</h1>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/triage" aria-current="page">Triage</a>
+        <a href="/reflection">Reflection</a>
+      </nav>
+    </header>
+    <p class="status">
+      Tab through rows; change category to save immediately (<kbd>is_manual_override</kbd> set).
+    </p>
+    <div>
+      <label>
+        Payee filter
+        <input type="search" id="payee-filter" placeholder="e.g. amazon" autocomplete="off" />
+      </label>
+      <button type="button" id="reload">Reload</button>
+      <span id="count" class="status"></span>
+    </div>
+    <table id="triage-table">
+      <thead>
+        <tr>
+          <th>Posted</th>
+          <th>Payee</th>
+          <th>Memo</th>
+          <th>Amount</th>
+          <th>Category</th>
+        </tr>
+      </thead>
+      <tbody id="triage-body"></tbody>
+    </table>
+    <script type="module" src="/triage.js"></script>
+  </body>
+</html>

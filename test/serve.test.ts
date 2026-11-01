@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import {
+  createApiContext,
+  handleGetCashflowReport,
+  handleGetUncategorized,
+  handleSetTransactionCategory,
+} from "../src/api.js";
+import { resolvePaths } from "../src/config.js";
+import { listAllTransactions, openDatabase } from "../src/db.js";
+import { ingestOfxPaths } from "../src/ingest.js";
+import { startAntibudgetServer } from "../src/server.js";
+
+const repoRoot = path.join(import.meta.dirname, "..", "..");
+const fixturePath = path.join(repoRoot, "fixtures", "sample.ofx");
+
+function setupHomeWithoutRules(): ReturnType<typeof resolvePaths> {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-m3-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  fs.copyFileSync(fixturePath, path.join(paths.inbox, "sample.ofx"));
+  openDatabase(paths.dbPath).close();
+  ingestOfxPaths({ paths });
+  return paths;
+}
+
+test("startAntibudgetServer binds localhost and serves triage page", async () => {
+  const paths = setupHomeWithoutRules();
+  const started = await startAntibudgetServer({ home: paths.home, port: 0 });
+  try {
+    assert.equal(started.host, "127.0.0.1");
+    const res = await fetch(`${started.url}/triage`);
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /Quick Triage/);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      started.server.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
+});
+
+test("API set category sets is_manual_override", () => {
+  const paths = setupHomeWithoutRules();
+  const ctx = createApiContext({ home: paths.home });
+  const uncategorized = handleGetUncategorized(ctx, new URLSearchParams()) as {
+    transactions: { acctId: string; fitid: string }[];
+  };
+  assert.ok(uncategorized.transactions.length >= 1);
+  const tx = uncategorized.transactions[0];
+  handleSetTransactionCategory(ctx, {
+    acctId: tx.acctId,
+    fitid: tx.fitid,
+    categoryName: "Web Triage",
+  });
+  const db = openDatabase(paths.dbPath);
+  const row = listAllTransactions(db).find((t) => t.fitid === tx.fitid);
+  assert.equal(row?.categoryName, "Web Triage");
+  assert.equal(row?.isManualOverride, true);
+  db.close();
+});
+
+test("API cashflow report returns monthly series", () => {
+  const paths = setupHomeWithoutRules();
+  const ctx = createApiContext({ home: paths.home });
+  const report = handleGetCashflowReport(ctx) as {
+    rows: { month: string; incomeCents: number }[];
+  };
+  assert.ok(report.rows.length >= 1);
+  assert.ok(report.rows.some((r) => r.incomeCents > 0));
+});
+
+test("uncategorized payee filter matches AMAZON", () => {
+  const paths = setupHomeWithoutRules();
+  const ctx = createApiContext({ home: paths.home });
+  const filtered = handleGetUncategorized(ctx, new URLSearchParams({ payee: "amazon" })) as {
+    transactions: { payee: string | null }[];
+  };
+  assert.equal(filtered.transactions.length, 1);
+  assert.match(filtered.transactions[0].payee ?? "", /AMAZON/i);
+});

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reflection — antibudget</title>
+    <link rel="stylesheet" href="/common.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Reflection</h1>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/triage">Triage</a>
+        <a href="/reflection" aria-current="page">Reflection</a>
+      </nav>
+    </header>
+    <div class="cards" id="summary-cards"></div>
+    <section>
+      <h2>Cashflow by month</h2>
+      <div id="cashflow-chart" class="chart-wrap"></div>
+    </section>
+    <section>
+      <h2>Category breakdown</h2>
+      <label>
+        Month
+        <input type="month" id="month-picker" />
+      </label>
+      <button type="button" id="load-month">Load</button>
+      <table id="monthly-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Total</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody id="monthly-body"></tbody>
+      </table>
+      <h3>Flow (selected month)</h3>
+      <svg id="sankey" class="sankey" viewBox="0 0 400 220" aria-label="Income to expense categories"></svg>
+    </section>
+    <script type="module" src="/reflection.js"></script>
+  </body>
+</html>
