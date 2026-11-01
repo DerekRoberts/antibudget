@@ -6,7 +6,7 @@
 
 ## Tech stack and constraints
 
-- **Runtime:** Node.js **22.5+** (`node:sqlite`); **Node 25** is the tested CI and dry-run target. TypeScript `strict: true`. `@types/node` tracks the tested major (25); CI also runs on **22.5** to guard the engine floor.
+- **Runtime:** Node.js **22.5+** (`node:sqlite`); **Node 25** is the tested CI and dry-run target. TypeScript `strict: true`. `@types/node` tracks the tested major (25); CI runs Node **22** (latest 22.x) and **25** to exercise the engine floor.
 - **Database:** Built-in `node:sqlite` (`DatabaseSync`) only. Do **not** add `sqlite3` or `better-sqlite3`.
 - **SQLite:** Open every connection with `PRAGMA journal_mode = DELETE;` and `PRAGMA foreign_keys = ON;` (single-file DB safe for cloud sync folders).
 - **Money:** Store amounts as **integer cents** (`INTEGER`), never `REAL`.
