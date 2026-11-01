@@ -77,7 +77,7 @@ From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8
 **First run** (empty data volume — ingest before `serve` will start):
 
 ```bash
-podman compose run --rm dev ingest /app/fixtures/sample.ofx
+podman compose run --build --rm dev ingest /app/fixtures/sample.ofx
 podman compose up --build
 # or: docker compose up --build
 ```

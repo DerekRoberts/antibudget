@@ -55,6 +55,15 @@ function serveDisplayUrl(host: string, port: number, boundUrl: string): string {
   return boundUrl;
 }
 
+function assertServeBindHost(host: string): void {
+  if (host === "0.0.0.0" || host === "::" || isLoopbackBindHost(host)) {
+    return;
+  }
+  throw new Error(
+    `Invalid --host: ${host}. Use a loopback address (127.0.0.1, localhost, ::1), or 0.0.0.0 / :: for container port mapping.`,
+  );
+}
+
 function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
   return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
 }
@@ -225,19 +234,13 @@ async function main(): Promise<void> {
         i += 1;
       }
     }
-    if (!isLoopbackBindHost(host) && host !== "0.0.0.0" && host !== "::") {
-      console.error(
-        "Warning: binding to a non-loopback address; Host-header checks are not an authentication boundary.",
-      );
-    }
+    assertServeBindHost(host);
     const started = await startAntibudgetServer({ host, port });
     const displayUrl = serveDisplayUrl(host, started.port, started.url);
     const localityNote =
       host === "0.0.0.0" || host === "::"
         ? " (container listens on all interfaces; use the host-mapped URL above)"
-        : isLoopbackBindHost(host)
-          ? " (localhost only)"
-          : "";
+        : " (localhost only)";
     console.log(`antibudget UI at ${displayUrl}${localityNote}`);
     console.log("Press Ctrl+C to stop.");
     return;
