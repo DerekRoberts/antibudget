@@ -114,7 +114,11 @@ async function main(): Promise<void> {
   if (command === "categorize") {
     const initRules = args.includes("--init-rules");
     const paths = resolvePaths({ createDirs: true });
-    const result = categorizeTransactions({ paths, createDefaultRules: initRules });
+    const result = categorizeTransactions({
+      paths,
+      createDefaultRules: initRules,
+      initRulesOnly: initRules,
+    });
     if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
       console.error(
         `No rules.yaml at ${paths.rulesPath}. From a git checkout, copy fixtures/rules.example.yaml there and edit payees before ingest (ingest auto-categorizes when the file exists). From npm, run "antibudget categorize --init-rules" to write built-in starter rules, then edit before ingest.`,
@@ -162,9 +166,11 @@ async function main(): Promise<void> {
         return;
       }
       printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
+      return;
     } finally {
       db.close();
     }
+    return;
   }
 
   if (command === "serve") {

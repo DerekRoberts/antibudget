@@ -137,6 +137,24 @@ test("monthlyCategoryRollup groups categorized spending", () => {
   db.close();
 });
 
+test("initRulesOnly writes rules without categorizing existing transactions", () => {
+  const { paths } = setupHomeWithIngest(false);
+  const result = categorizeTransactions({
+    paths,
+    createDefaultRules: true,
+    initRulesOnly: true,
+  });
+  assert.equal(result.defaultRulesCreated, true);
+  assert.ok(result.rulesLoaded >= 1);
+  assert.equal(result.transactionsUpdated, 0);
+  const db = openDatabase(paths.dbPath);
+  assert.equal(
+    listAllTransactions(db).filter((t) => t.categoryId === null).length,
+    5,
+  );
+  db.close();
+});
+
 test("missing rules.yaml leaves transactions uncategorized", () => {
   const { paths } = setupHomeWithIngest(false);
   const db = openDatabase(paths.dbPath);

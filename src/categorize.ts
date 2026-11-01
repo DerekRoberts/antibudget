@@ -27,6 +27,8 @@ export interface CategorizeOptions {
   db?: AntibudgetDb;
   rules?: RulesFile;
   createDefaultRules?: boolean;
+  /** When true with createDefaultRules, write rules.yaml only (do not apply to transactions). */
+  initRulesOnly?: boolean;
 }
 
 export function categorizeTransactions(options: CategorizeOptions = {}): CategorizeResult {
@@ -41,6 +43,15 @@ export function categorizeTransactions(options: CategorizeOptions = {}): Categor
     }
 
     const rulesFile = options.rules ?? loadRules(paths);
+
+    if (options.createDefaultRules && options.initRulesOnly) {
+      return {
+        rulesLoaded: rulesFile.rules.length,
+        transactionsConsidered: 0,
+        transactionsUpdated: 0,
+        defaultRulesCreated,
+      };
+    }
 
     const transactions = listAllTransactions(db);
     const updates: ApplyCategoryUpdate[] = [];
