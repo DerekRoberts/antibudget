@@ -149,6 +149,51 @@ th {
   opacity: 0.8;
 }
 
+.drop-zone {
+  border: 2px dashed #8886;
+  border-radius: 8px;
+  padding: 1.25rem 1rem;
+  margin: 1rem 0 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.drop-zone-compact {
+  padding: 0.85rem 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.drop-zone:focus-visible {
+  outline: 2px solid #3366cc;
+  outline-offset: 2px;
+}
+
+.drop-zone-active,
+.drop-zone:hover {
+  border-color: #3366cc;
+  background: #3366cc12;
+}
+
+.drop-zone-busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.drop-zone-label {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.drop-zone-status {
+  margin: 0.65rem 0 0;
+}
+
+.drop-zone-error {
+  color: #b00020;
+  opacity: 1;
+}
+
 kbd {
   font: inherit;
   border: 1px solid #8886;

@@ -15,23 +15,31 @@
       </nav>
     </header>
     <p>Local cashflow views for your SQLite ledger. Start with uncategorized transactions, then review monthly rollups.</p>
+    <div id="ingest-drop"></div>
     <p class="status" id="getting-started">
-      New ledger? Drop bank exports in your data-dir <code>inbox/</code>, then run
-      <code>antibudget ingest</code>.
+      New ledger? Drop bank exports above or use <code>antibudget ingest</code> on files in your data-dir
+      <code>inbox/</code>.
     </p>
     <ul>
       <li><a href="/triage">Quick Triage</a> — categorize uncategorized rows (keyboard-friendly table).</li>
       <li><a href="/reflection">Reflection</a> — monthly category breakdown and income vs expense trend.</li>
     </ul>
     <script type="module">
-      fetch("/api/ledger/meta")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.transactionCount > 0) {
-            document.getElementById("getting-started")?.remove();
-          }
-        })
-        .catch(() => {});
+      import { mountIngestDropZone, fetchLedgerTransactionCount } from "/ingest-drop.js";
+
+      mountIngestDropZone(document.getElementById("ingest-drop"));
+
+      async function refreshGettingStarted() {
+        const count = await fetchLedgerTransactionCount();
+        if (count !== null && count > 0) {
+          document.getElementById("getting-started")?.remove();
+        }
+      }
+
+      void refreshGettingStarted();
+      window.addEventListener("antibudget:ingested", () => {
+        void refreshGettingStarted();
+      });
     </script>
   </body>
 </html>

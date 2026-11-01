@@ -3,15 +3,16 @@ import type { IncomingMessage } from "node:http";
 import type { AntibudgetPaths } from "./config.js";
 import { resolvePaths } from "./config.js";
 import {
+  countTransactions,
   getAccountByAcctId,
   getOrCreateCategory,
-  countTransactions,
   listAccountBalances,
   listCategories,
   openDatabase,
   setTransactionCategoryManual,
   transactionExists,
 } from "./db.js";
+import { handleIngestUpload } from "./upload.js";
 import type { AntibudgetDb } from "./db.js";
 import {
   listUncategorizedTransactions,
@@ -222,6 +223,10 @@ export function handleApiRequest(
     }
     if (method === "GET" && pathname === "/api/ledger/meta") {
       return { status: 200, body: handleGetLedgerMeta(ctx) };
+    }
+    if (method === "POST" && pathname === "/api/ingest/upload") {
+      const body = await handleIngestUpload(ctx.paths, req);
+      return { status: 200, body };
     }
     if (method === "GET" && pathname === "/api/transactions/uncategorized") {
       return { status: 200, body: handleGetUncategorized(ctx, query) };
