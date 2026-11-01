@@ -1,12 +1,15 @@
 import {
   deleteTransactionsByKeys,
   getTransactionClassification,
-  insertTransactionIgnore,
+  insertTransactionFromHistory,
+  listAccountBalanceSnapshots,
   openDatabase,
   restoreTransactionClassification,
   runInTransaction,
+  setAccountLedgerBalance,
+  type AccountBalanceSnapshot,
   type AntibudgetDb,
-  type InsertTransactionInput,
+  type StoredTransactionRow,
   type TransactionClassification,
   type TransactionKey,
 } from "./db.js";
@@ -20,12 +23,12 @@ export interface CategoryHistoryPayload {
   after: TransactionClassification;
 }
 
-export interface IngestHistoryRow extends InsertTransactionInput {
-  accountId: number;
-}
+export interface IngestHistoryRow extends StoredTransactionRow {}
 
 export interface IngestHistoryPayload {
   rows: IngestHistoryRow[];
+  accountBalancesBefore: AccountBalanceSnapshot[];
+  accountBalancesAfter: AccountBalanceSnapshot[];
 }
 
 export interface HistoryStatus {
@@ -111,16 +114,43 @@ function applyCategoryBackward(db: AntibudgetDb, payload: CategoryHistoryPayload
   applyCategoryState(db, payload.accountId, payload.fitid, payload.before);
 }
 
+function applyAccountBalances(db: AntibudgetDb, snapshots: AccountBalanceSnapshot[]): void {
+  for (const snapshot of snapshots) {
+    setAccountLedgerBalance(db, snapshot.acctId, snapshot.ledgerBalanceCents);
+  }
+}
+
+function accountSnapshotMap(
+  snapshots: AccountBalanceSnapshot[],
+): Map<string, number | null> {
+  return new Map(snapshots.map((row) => [row.acctId, row.ledgerBalanceCents]));
+}
+
+function syncAccountsForIngestUndo(
+  db: AntibudgetDb,
+  before: AccountBalanceSnapshot[],
+  after: AccountBalanceSnapshot[],
+): void {
+  const beforeMap = accountSnapshotMap(before);
+  for (const snapshot of after) {
+    const previous = beforeMap.get(snapshot.acctId);
+    setAccountLedgerBalance(db, snapshot.acctId, previous ?? null);
+  }
+}
+
+function syncAccountsForIngestRedo(
+  db: AntibudgetDb,
+  after: AccountBalanceSnapshot[],
+): void {
+  for (const snapshot of after) {
+    setAccountLedgerBalance(db, snapshot.acctId, snapshot.ledgerBalanceCents);
+  }
+}
+
 function applyIngestForward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
+  syncAccountsForIngestRedo(db, payload.accountBalancesAfter);
   for (const row of payload.rows) {
-    insertTransactionIgnore(db, {
-      accountId: row.accountId,
-      fitid: row.fitid,
-      amountCents: row.amountCents,
-      postedAt: row.postedAt,
-      payee: row.payee,
-      memo: row.memo,
-    });
+    insertTransactionFromHistory(db, row);
   }
 }
 
@@ -130,6 +160,11 @@ function applyIngestBackward(db: AntibudgetDb, payload: IngestHistoryPayload): v
     fitid: row.fitid,
   }));
   deleteTransactionsByKeys(db, keys);
+  syncAccountsForIngestUndo(
+    db,
+    payload.accountBalancesBefore,
+    payload.accountBalancesAfter,
+  );
 }
 
 function eventLabel(kind: HistoryKind, payload: CategoryHistoryPayload | IngestHistoryPayload): string {
@@ -158,11 +193,20 @@ export function recordCategoryHistory(
   appendEvent(db, "category", { accountId, fitid, before, after } satisfies CategoryHistoryPayload);
 }
 
-export function recordIngestHistory(db: AntibudgetDb, rows: IngestHistoryRow[]): void {
+export function recordIngestHistory(
+  db: AntibudgetDb,
+  rows: IngestHistoryRow[],
+  accountBalancesBefore: AccountBalanceSnapshot[],
+  accountBalancesAfter: AccountBalanceSnapshot[],
+): void {
   if (rows.length === 0) {
     return;
   }
-  appendEvent(db, "ingest", { rows } satisfies IngestHistoryPayload);
+  appendEvent(db, "ingest", {
+    rows,
+    accountBalancesBefore,
+    accountBalancesAfter,
+  } satisfies IngestHistoryPayload);
 }
 
 export function getHistoryStatus(db: AntibudgetDb): HistoryStatus {
@@ -241,7 +285,6 @@ export function captureClassificationAfterManualSet(
   db: AntibudgetDb,
   accountId: number,
   fitid: string,
-  _categoryId: number,
 ): TransactionClassification {
   const state = getTransactionClassification(db, accountId, fitid);
   if (!state) {

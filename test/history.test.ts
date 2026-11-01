@@ -97,6 +97,29 @@ test("undo ingest removes inserted transactions", () => {
   db2.close();
 });
 
+test("undo ingest restores account ledger balance snapshot", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-history-bal-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  fs.copyFileSync(fixturePath, path.join(paths.inbox, "sample.ofx"));
+  openDatabase(paths.dbPath).close();
+  ingestOfxPaths({ paths, recordHistory: true });
+  const db = openDatabase(paths.dbPath);
+  const beforeUndo = db
+    .prepare("SELECT ledger_balance_cents FROM accounts WHERE acct_id = ?")
+    .get("checking-synth-001") as unknown as { ledger_balance_cents: number };
+  undoLedgerMutation(db);
+  const afterUndo = db
+    .prepare("SELECT ledger_balance_cents FROM accounts WHERE acct_id = ?")
+    .get("checking-synth-001") as unknown as { ledger_balance_cents: number | null };
+  assert.equal(afterUndo.ledger_balance_cents, null);
+  redoLedgerMutation(db);
+  const afterRedo = db
+    .prepare("SELECT ledger_balance_cents FROM accounts WHERE acct_id = ?")
+    .get("checking-synth-001") as unknown as { ledger_balance_cents: number };
+  assert.equal(afterRedo.ledger_balance_cents, beforeUndo.ledger_balance_cents);
+  db.close();
+});
+
 test("new mutation after undo-all clears abandoned history branch", () => {
   const paths = setupHomeWithIngest();
   const db = openDatabase(paths.dbPath);

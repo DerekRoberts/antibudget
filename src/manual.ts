@@ -7,7 +7,7 @@ import {
   setTransactionCategoryManual,
   type AntibudgetDb,
 } from "./db.js";
-import { captureClassificationAfterManualSet, recordCategoryHistory } from "./history.js";
+import { recordCategoryHistory } from "./history.js";
 
 export interface SetCategoryOptions {
   acctId: string;
@@ -35,7 +35,10 @@ export function setManualTransactionCategoryInDb(
     throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
   }
   if (options.recordHistory !== false) {
-    const after = captureClassificationAfterManualSet(db, account.id, options.fitid, categoryId);
+    const after = getTransactionClassification(db, account.id, options.fitid);
+    if (!after) {
+      throw new Error(`Transaction not found: ${options.acctId} / ${options.fitid}`);
+    }
     recordCategoryHistory(db, account.id, options.fitid, before, after);
   }
   return true;

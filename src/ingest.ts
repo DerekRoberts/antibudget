@@ -8,12 +8,13 @@ import { resolvePaths, type AntibudgetPaths } from "./config.js";
 import {
   countTransactions,
   insertTransactionIgnore,
-  listTransactionsInsertedSince,
+  listAccountBalanceSnapshots,
+  loadStoredTransactionRows,
   openDatabase,
   runInTransaction,
-  snapshotTransactionKeys,
   upsertAccount,
   type AntibudgetDb,
+  type TransactionKey,
 } from "./db.js";
 import { recordIngestHistory } from "./history.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
@@ -148,12 +149,13 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
     let transactionsInserted = 0;
     let transactionsSkipped = 0;
     const recordHistory = options.recordHistory !== false;
-    const keysBefore = recordHistory ? snapshotTransactionKeys(db) : null;
+    const accountBalancesBefore = recordHistory ? listAccountBalanceSnapshots(db) : null;
+    const insertedKeys: TransactionKey[] = [];
 
     for (const filePath of files) {
       const parsed = parseOfxFile(filePath);
       const before = countTransactions(db);
-      ingestParsedStatement(db, parsed);
+      ingestParsedStatement(db, parsed, insertedKeys);
       const after = countTransactions(db);
       const inserted = after - before;
       transactionsInserted += inserted;
@@ -166,9 +168,10 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       categorizeTransactions({ paths, db, rules: rulesFile });
     }
 
-    if (recordHistory && keysBefore) {
-      const newRows = listTransactionsInsertedSince(db, keysBefore);
-      recordIngestHistory(db, newRows);
+    if (recordHistory && accountBalancesBefore) {
+      const rows = loadStoredTransactionRows(db, insertedKeys);
+      const accountBalancesAfter = listAccountBalanceSnapshots(db);
+      recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
     }
 
     return {
@@ -211,7 +214,11 @@ function resolveIngestFiles(
   return [resolved];
 }
 
-function ingestParsedStatement(db: AntibudgetDb, parsed: ParsedOfxStatement): void {
+function ingestParsedStatement(
+  db: AntibudgetDb,
+  parsed: ParsedOfxStatement,
+  insertedKeys: TransactionKey[],
+): void {
   runInTransaction(db, () => {
     const account = upsertAccount(
       db,
@@ -220,7 +227,7 @@ function ingestParsedStatement(db: AntibudgetDb, parsed: ParsedOfxStatement): vo
     );
 
     for (const tx of parsed.transactions) {
-      insertTransactionIgnore(db, {
+      const inserted = insertTransactionIgnore(db, {
         accountId: account.id,
         fitid: tx.fitid,
         amountCents: tx.amountCents,
@@ -228,6 +235,9 @@ function ingestParsedStatement(db: AntibudgetDb, parsed: ParsedOfxStatement): vo
         payee: tx.payee,
         memo: tx.memo,
       });
+      if (inserted) {
+        insertedKeys.push({ accountId: account.id, fitid: tx.fitid });
+      }
     }
   });
 }
