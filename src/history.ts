@@ -280,15 +280,3 @@ export function withHistoryDb<T>(dbPath: string, fn: (db: AntibudgetDb) => T): T
     db.close();
   }
 }
-
-export function captureClassificationAfterManualSet(
-  db: AntibudgetDb,
-  accountId: number,
-  fitid: string,
-): TransactionClassification {
-  const state = getTransactionClassification(db, accountId, fitid);
-  if (!state) {
-    throw new Error(`Transaction not found: ${accountId} / ${fitid}`);
-  }
-  return state;
-}
