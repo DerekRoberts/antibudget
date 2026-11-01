@@ -5,6 +5,7 @@ import type { IncomingMessage } from "node:http";
 import { ApiError } from "./api.js";
 import type { AntibudgetPaths } from "./config.js";
 import { ingestOfxPaths, isOfxUploadFilename, type IngestResult } from "./ingest.js";
+import { countTransactions, openDatabase } from "./db.js";
 
 export const MAX_UPLOAD_BODY_BYTES = 32 * 1024 * 1024;
 
@@ -23,18 +24,6 @@ export interface IngestUploadResponse extends IngestResult {
   fileErrors?: IngestUploadFileError[];
 }
 
-function errnoCode(err: unknown): string | undefined {
-  if (err && typeof err === "object" && "code" in err) {
-    return (err as NodeJS.ErrnoException).code;
-  }
-  return undefined;
-}
-
-function isSystemIoError(err: unknown): boolean {
-  const code = errnoCode(err);
-  return code === "EACCES" || code === "ENOSPC" || code === "EPERM" || code === "EIO";
-}
-
 function isParseIngestError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false;
@@ -50,13 +39,17 @@ function isParseIngestError(err: unknown): boolean {
 }
 
 function publicFileErrorMessage(err: unknown): string {
-  if (isSystemIoError(err)) {
-    return "Import failed";
-  }
   if (isParseIngestError(err)) {
     return "Invalid or unreadable OFX/QFX export";
   }
   return "Import failed";
+}
+
+function allFailedUploadStatus(fileErrors: IngestUploadFileError[], hadServerFault: boolean): number {
+  if (hadServerFault) {
+    return 500;
+  }
+  return 422;
 }
 
 function parseContentTypeBoundary(contentType: string): string | null {
@@ -241,34 +234,45 @@ export function ingestUploadedFiles(
     let transactionsSkipped = 0;
     let errors = 0;
     const fileErrors: IngestUploadFileError[] = [];
-    let hadSystemError = false;
+    let hadServerFault = false;
 
-    for (const entry of staged) {
-      try {
-        const result = ingestOfxPaths({ paths, sourcePath: entry.filePath });
-        filesProcessed += result.filesProcessed;
-        transactionsInserted += result.transactionsInserted;
-        transactionsSkipped += result.transactionsSkipped;
-      } catch (err) {
-        errors += 1;
-        fileErrors.push({
-          filename: entry.filename,
-          message: publicFileErrorMessage(err),
-        });
-        if (isSystemIoError(err)) {
-          hadSystemError = true;
+    const db = openDatabase(paths.dbPath);
+    try {
+      for (const entry of staged) {
+        const txBefore = countTransactions(db);
+        try {
+          const result = ingestOfxPaths({ paths, sourcePath: entry.filePath, db });
+          filesProcessed += result.filesProcessed;
+          transactionsInserted += result.transactionsInserted;
+          transactionsSkipped += result.transactionsSkipped;
+        } catch (err) {
+          errors += 1;
+          const txAfter = countTransactions(db);
+          const insertedDelta = txAfter - txBefore;
+          if (insertedDelta > 0) {
+            filesProcessed += 1;
+            transactionsInserted += insertedDelta;
+          }
+          if (!isParseIngestError(err)) {
+            hadServerFault = true;
+          }
+          fileErrors.push({
+            filename: entry.filename,
+            message: publicFileErrorMessage(err),
+          });
         }
       }
+    } finally {
+      db.close();
     }
 
     if (filesProcessed === 0 && errors > 0) {
-      if (hadSystemError) {
-        throw new ApiError(500, "Import failed");
-      }
-      throw new ApiError(
-        422,
-        fileErrors[0]?.message ?? "Invalid or unreadable OFX/QFX export",
-      );
+      const status = allFailedUploadStatus(fileErrors, hadServerFault);
+      const message =
+        status === 422
+          ? (fileErrors[0]?.message ?? "Invalid or unreadable OFX/QFX export")
+          : "Import failed";
+      throw new ApiError(status, message);
     }
 
     return {
