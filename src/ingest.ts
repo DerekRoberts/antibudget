@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { globSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { categorizeTransactions } from "./categorize.js";
@@ -25,18 +27,67 @@ export interface IngestOptions {
   db?: AntibudgetDb;
   /** When set, ingest only this file or directory instead of inbox. */
   sourcePath?: string;
+  /** When ingesting a directory, include OFX/QFX in subdirectories (default: false). */
+  recursive?: boolean;
 }
 
 const OFX_EXTENSIONS = new Set([".ofx", ".qfx"]);
+const GLOB_CHARS = /[*?[\{]/;
 
-export function listOfxFiles(dir: string): string[] {
+/** Expands a leading `~` or `~/` to the user home directory. */
+export function expandTilde(input: string): string {
+  if (input === "~") {
+    return os.homedir();
+  }
+  if (input.startsWith("~/") || input.startsWith("~\\")) {
+    return path.join(os.homedir(), input.slice(2));
+  }
+  return input;
+}
+
+export function pathContainsGlob(raw: string): boolean {
+  return GLOB_CHARS.test(raw);
+}
+
+/** Resolves CLI ingest paths: tilde expansion, then absolute path (non-glob). */
+export function resolveIngestUserPath(raw: string): string {
+  const expanded = expandTilde(raw);
+  if (pathContainsGlob(expanded)) {
+    return expanded;
+  }
+  return path.resolve(expanded);
+}
+
+function isOfxExtension(filePath: string): boolean {
+  return OFX_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+export function listOfxFiles(dir: string, options?: { recursive?: boolean }): string[] {
   if (!fs.existsSync(dir)) {
     return [];
   }
+  if (options?.recursive) {
+    return globSync("**/*", { cwd: dir })
+      .filter((rel) => isOfxExtension(rel))
+      .map((rel) => path.join(dir, rel))
+      .sort();
+  }
   return fs
     .readdirSync(dir)
-    .filter((name) => OFX_EXTENSIONS.has(path.extname(name).toLowerCase()))
+    .filter((name) => isOfxExtension(name))
     .map((name) => path.join(dir, name))
+    .sort();
+}
+
+function listOfxFilesFromGlobPattern(pattern: string): string[] {
+  const expanded = expandTilde(pattern);
+  const matches = path.isAbsolute(expanded)
+    ? globSync(expanded)
+    : globSync(expanded, { cwd: process.cwd() });
+  const baseDir = path.isAbsolute(expanded) ? undefined : process.cwd();
+  return matches
+    .map((match) => (baseDir ? path.resolve(baseDir, match) : path.resolve(match)))
+    .filter((filePath) => fs.statSync(filePath).isFile() && isOfxExtension(filePath))
     .sort();
 }
 
@@ -46,7 +97,7 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
   const db = options.db ?? openDatabase(paths.dbPath);
 
   try {
-    const files = resolveIngestFiles(paths, options.sourcePath);
+    const files = resolveIngestFiles(paths, options.sourcePath, options.recursive);
     const rulesFile: RulesFile | undefined = fs.existsSync(paths.rulesPath)
       ? loadRules(paths)
       : undefined;
@@ -81,20 +132,26 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
   }
 }
 
-function resolveIngestFiles(paths: AntibudgetPaths, sourcePath?: string): string[] {
+function resolveIngestFiles(
+  paths: AntibudgetPaths,
+  sourcePath?: string,
+  recursive?: boolean,
+): string[] {
   if (!sourcePath) {
     return listOfxFiles(paths.inbox);
   }
-  const resolved = path.resolve(sourcePath);
+  if (pathContainsGlob(sourcePath)) {
+    return listOfxFilesFromGlobPattern(sourcePath);
+  }
+  const resolved = path.resolve(expandTilde(sourcePath));
   if (!fs.existsSync(resolved)) {
     throw new Error(`Ingest path not found: ${resolved}`);
   }
   const stat = fs.statSync(resolved);
   if (stat.isDirectory()) {
-    return listOfxFiles(resolved);
+    return listOfxFiles(resolved, { recursive: recursive === true });
   }
-  const ext = path.extname(resolved).toLowerCase();
-  if (!OFX_EXTENSIONS.has(ext)) {
+  if (!isOfxExtension(resolved)) {
     throw new Error(
       `Ingest path is not an OFX/QFX file: ${resolved} (expected .ofx or .qfx)`,
     );

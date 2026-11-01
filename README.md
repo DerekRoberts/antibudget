@@ -13,8 +13,22 @@ Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicat
 npm install
 npm test
 npm run build
-npx antibudget ingest   # reads ~/.local/share/antibudget/inbox (or ANTIBUDGET_HOME)
 ```
+
+Run the CLI from the build output (Node needs `--experimental-sqlite` until the flag is default):
+
+```bash
+node --experimental-sqlite dist/src/cli.js ingest
+```
+
+Optional: link the package so `antibudget` is on your `PATH` after each build:
+
+```bash
+npm link
+antibudget ingest
+```
+
+(`npx antibudget ingest` works too if you prefer not to link.)
 
 Copy synthetic exports from `fixtures/` into your inbox for a dry run. **Never commit real `.ofx`, `.qfx`, or `.db` files** — see `.gitignore`.
 
@@ -34,13 +48,21 @@ cp fixtures/rules.example.yaml "$ANTIBUDGET_HOME/rules.yaml"
 # Edit rules.yaml for your payees before ingesting (ingest auto-categorizes when rules exist)
 # Copy real exports into inbox/ (not into the repo)
 
-npx antibudget ingest
-npx antibudget categorize              # re-apply after rule edits
+node --experimental-sqlite dist/src/cli.js ingest
+node --experimental-sqlite dist/src/cli.js categorize   # re-apply after rule edits
 
-npx antibudget serve                     # http://127.0.0.1:8080 (127.0.0.1 only)
+node --experimental-sqlite dist/src/cli.js serve          # http://127.0.0.1:8080 (127.0.0.1 only)
 ```
 
-If ingest finds no files, it prints where to drop `.ofx`/`.qfx`. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
+Ingest all `.ofx`/`.qfx` in a folder (non-recursive; `~` expands to your home directory). Processed files are moved into `$ANTIBUDGET_HOME/archive`:
+
+```bash
+node --experimental-sqlite dist/src/cli.js ingest ~/Documents
+```
+
+Use `--recursive` to include subfolders. Shell-style globs work when the path contains `*`, `?`, or `[` (for example `~/Downloads/*.qfx`).
+
+If ingest finds no files, it prints where to drop exports or which path was scanned. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
 
 ### Data directory
 
@@ -56,18 +78,18 @@ Override with **`ANTIBUDGET_HOME`** (useful for a symlink into Google Drive):
 export ANTIBUDGET_HOME="$HOME/Drive/antibudget-data"
 mkdir -p "$ANTIBUDGET_HOME/inbox"
 cp fixtures/sample.ofx "$ANTIBUDGET_HOME/inbox/"
-npx antibudget ingest
+node --experimental-sqlite dist/src/cli.js ingest
 ```
 
-Layout: `inbox/` → ingest → `archive/` + `antibudget.db`. Copy `fixtures/rules.example.yaml` to your data dir as `rules.yaml` (or run `npx antibudget categorize --init-rules`).
+Layout: `inbox/` → ingest → `archive/` + `antibudget.db`. Copy `fixtures/rules.example.yaml` to your data dir as `rules.yaml` (or run `node --experimental-sqlite dist/src/cli.js categorize --init-rules`).
 
 ```bash
-npx antibudget categorize              # apply rules to existing transactions
-npx antibudget set-category ACCT FITID CategoryName
-npx antibudget report monthly --month 2026-01
-npx antibudget report cashflow
-npx antibudget report uncategorized
-npx antibudget serve              # http://127.0.0.1:8080 — triage + reflection UI
+node --experimental-sqlite dist/src/cli.js categorize
+node --experimental-sqlite dist/src/cli.js set-category ACCT FITID CategoryName
+node --experimental-sqlite dist/src/cli.js report monthly --month 2026-01
+node --experimental-sqlite dist/src/cli.js report cashflow
+node --experimental-sqlite dist/src/cli.js report uncategorized
+node --experimental-sqlite dist/src/cli.js serve
 ```
 
 ## Privacy
