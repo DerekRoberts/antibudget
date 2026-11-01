@@ -85,6 +85,25 @@ function updateCount() {
   if (count) count.textContent = `${n} uncategorized`;
 }
 
+function emptyUncategorizedMessage(payeeFilter, transactionCount) {
+  if (payeeFilter) {
+    return "No uncategorized transactions match this payee filter.";
+  }
+  if (transactionCount === 0) {
+    return "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+  }
+  return "No uncategorized transactions — everything in the ledger is categorized.";
+}
+
+async function ledgerTransactionCount() {
+  const res = await fetch("/api/ledger/meta");
+  if (!res.ok) {
+    return null;
+  }
+  const data = await res.json();
+  return typeof data.transactionCount === "number" ? data.transactionCount : null;
+}
+
 async function loadTransactions() {
   const filter = document.getElementById("payee-filter");
   const params = new URLSearchParams();
@@ -97,14 +116,16 @@ async function loadTransactions() {
   if (!tbody) return;
   tbody.replaceChildren();
   if (data.transactions.length === 0) {
+    const transactionCount = await ledgerTransactionCount();
     const tr = document.createElement("tr");
     tr.dataset.placeholder = "true";
     const td = document.createElement("td");
     td.colSpan = 5;
     td.className = "status";
-    td.textContent = q
-      ? "No transactions match this payee filter."
-      : "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+    td.textContent =
+      transactionCount === null
+        ? "No uncategorized transactions to show."
+        : emptyUncategorizedMessage(q, transactionCount);
     tr.appendChild(td);
     tbody.appendChild(tr);
     updateCount();
