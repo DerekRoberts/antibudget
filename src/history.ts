@@ -114,10 +114,24 @@ function applyCategoryBackward(db: AntibudgetDb, payload: CategoryHistoryPayload
   applyCategoryState(db, payload.accountId, payload.fitid, payload.before);
 }
 
-function applyAccountBalances(db: AntibudgetDb, snapshots: AccountBalanceSnapshot[]): void {
-  for (const snapshot of snapshots) {
-    setAccountLedgerBalance(db, snapshot.acctId, snapshot.ledgerBalanceCents);
+function applyIngestForward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
+  syncAccountsForIngestRedo(db, payload.accountBalancesAfter ?? []);
+  for (const row of payload.rows) {
+    insertTransactionFromHistory(db, row);
   }
+}
+
+function applyIngestBackward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
+  const keys: TransactionKey[] = payload.rows.map((row) => ({
+    accountId: row.accountId,
+    fitid: row.fitid,
+  }));
+  deleteTransactionsByKeys(db, keys);
+  syncAccountsForIngestUndo(
+    db,
+    payload.accountBalancesBefore ?? [],
+    payload.accountBalancesAfter ?? [],
+  );
 }
 
 function accountSnapshotMap(
@@ -147,33 +161,17 @@ function syncAccountsForIngestRedo(
   }
 }
 
-function applyIngestForward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
-  syncAccountsForIngestRedo(db, payload.accountBalancesAfter);
-  for (const row of payload.rows) {
-    insertTransactionFromHistory(db, row);
-  }
-}
-
-function applyIngestBackward(db: AntibudgetDb, payload: IngestHistoryPayload): void {
-  const keys: TransactionKey[] = payload.rows.map((row) => ({
-    accountId: row.accountId,
-    fitid: row.fitid,
-  }));
-  deleteTransactionsByKeys(db, keys);
-  syncAccountsForIngestUndo(
-    db,
-    payload.accountBalancesBefore,
-    payload.accountBalancesAfter,
-  );
-}
-
 function eventLabel(kind: HistoryKind, payload: CategoryHistoryPayload | IngestHistoryPayload): string {
   if (kind === "category") {
     const p = payload as CategoryHistoryPayload;
     return `Category change (${p.fitid})`;
   }
   const p = payload as IngestHistoryPayload;
-  return `Import ${p.rows.length} transaction${p.rows.length === 1 ? "" : "s"}`;
+  const n = p.rows.length;
+  if (n === 0) {
+    return "Import balance update";
+  }
+  return `Import ${n} transaction${n === 1 ? "" : "s"}`;
 }
 
 export function recordCategoryHistory(
@@ -199,7 +197,9 @@ export function recordIngestHistory(
   accountBalancesBefore: AccountBalanceSnapshot[],
   accountBalancesAfter: AccountBalanceSnapshot[],
 ): void {
-  if (rows.length === 0) {
+  const unchangedBalances =
+    JSON.stringify(accountBalancesBefore) === JSON.stringify(accountBalancesAfter);
+  if (rows.length === 0 && unchangedBalances) {
     return;
   }
   appendEvent(db, "ingest", {

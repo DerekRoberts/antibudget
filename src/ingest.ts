@@ -151,29 +151,42 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
     const recordHistory = options.recordHistory !== false;
     const accountBalancesBefore = recordHistory ? listAccountBalanceSnapshots(db) : null;
     const insertedKeys: TransactionKey[] = [];
+    let ingestError: unknown;
 
-    for (const filePath of files) {
-      const parsed = parseOfxFile(filePath);
-      const before = countTransactions(db);
-      ingestParsedStatement(db, parsed, insertedKeys);
-      const after = countTransactions(db);
-      const inserted = after - before;
-      transactionsInserted += inserted;
-      transactionsSkipped += parsed.transactions.length - inserted;
+    try {
+      for (const filePath of files) {
+        const parsed = parseOfxFile(filePath);
+        const before = countTransactions(db);
+        ingestParsedStatement(db, parsed, insertedKeys);
+        const after = countTransactions(db);
+        const inserted = after - before;
+        transactionsInserted += inserted;
+        transactionsSkipped += parsed.transactions.length - inserted;
 
-      archiveFile(filePath, paths.archive);
+        archiveFile(filePath, paths.archive);
+      }
+
+      if (files.length > 0 && rulesFile) {
+        categorizeTransactions({ paths, db, rules: rulesFile });
+      }
+    } catch (error) {
+      ingestError = error;
+    } finally {
+      if (recordHistory && accountBalancesBefore) {
+        try {
+          const rows = loadStoredTransactionRows(db, insertedKeys);
+          const accountBalancesAfter = listAccountBalanceSnapshots(db);
+          runInTransaction(db, () => {
+            recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
+          });
+        } catch (historyError) {
+          console.error(historyError);
+        }
+      }
     }
 
-    if (files.length > 0 && rulesFile) {
-      categorizeTransactions({ paths, db, rules: rulesFile });
-    }
-
-    if (recordHistory && accountBalancesBefore) {
-      const rows = loadStoredTransactionRows(db, insertedKeys);
-      const accountBalancesAfter = listAccountBalanceSnapshots(db);
-      runInTransaction(db, () => {
-        recordIngestHistory(db, rows, accountBalancesBefore, accountBalancesAfter);
-      });
+    if (ingestError) {
+      throw ingestError;
     }
 
     return {
