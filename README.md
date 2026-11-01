@@ -92,6 +92,39 @@ node --experimental-sqlite dist/src/cli.js report uncategorized
 node --experimental-sqlite dist/src/cli.js serve
 ```
 
+## Local with Podman / Docker Compose
+
+From the repo root, build and run the **`dev`** service (web UI on **127.0.0.1:8080** only).
+
+**First run** (empty data volume — ingest before `serve` will start):
+
+```bash
+podman compose run --build --rm dev ingest /app/fixtures/sample.ofx
+podman compose up --build
+# or: docker compose up --build
+```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+
+The fixture ingest above is a **demo dry run** into the persistent `antibudget-data` volume. Before importing real exports, reset demo data with `podman compose down -v` (recreates an empty volume on the next `up`).
+
+**Data:** `ANTIBUDGET_HOME` is `/data` in the container (see `compose.yml`). To import real exports into the named volume:
+
+```bash
+podman compose create
+podman cp statement.ofx antibudget-dev:/data/inbox/
+podman compose run --rm dev ingest
+podman compose up -d
+```
+
+Or uncomment a host **inbox bind mount** in `compose.yml` (Podman `:U,z` or Docker `:rw` — see comments there), then:
+
+```bash
+podman compose run --rm dev ingest
+```
+
+Other CLI commands: `podman compose run --rm dev categorize`, etc. Use **`fixtures/`** only for synthetic data in git — never commit real exports.
+
 ## Privacy
 
 This repository is public and educational. Use only **`fixtures/sample.ofx`** in git. Keep real financial exports and databases on your machine.

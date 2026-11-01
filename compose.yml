@@ -1,0 +1,32 @@
+# Local AntiBudget — one app + SQLite data volume.
+# From repo root: podman compose up --build   (or docker compose up --build)
+
+x-app-env: &app-env
+  ANTIBUDGET_HOME: /data
+  NODE_ENV: production
+
+x-service-defaults: &service-defaults
+  build:
+    context: .
+    dockerfile: Containerfile
+  image: antibudget:dev
+  entrypoint: ["node", "--experimental-sqlite", "dist/src/cli.js"]
+
+services:
+  dev:
+    container_name: antibudget-dev
+    <<: *service-defaults
+    environment:
+      <<: *app-env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - antibudget-data:/data
+      # Podman (rootless): :U chowns host dir to container user; :z for SELinux
+      # - ${HOME}/Documents/antibudget-inbox:/data/inbox:U,z
+      # Docker: no :U — ensure the host dir is writable by UID 1000 (node), then :rw
+      # - ${HOME}/Documents/antibudget-inbox:/data/inbox:rw
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080"]
+
+volumes:
+  antibudget-data: {}

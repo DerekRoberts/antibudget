@@ -30,7 +30,7 @@ function printUsage(): void {
   antibudget report cashflow
   antibudget report uncategorized
   antibudget report triage
-  antibudget serve [--port PORT]
+  antibudget serve [--port PORT] [--host HOST]
 
 Ingest reads .ofx/.qfx from ANTIBUDGET_HOME/inbox when no path is given.
 With a directory, only that directory is scanned (not subfolders) unless --recursive.
@@ -68,6 +68,28 @@ const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const REPORT_KINDS = ["monthly", "cashflow", "uncategorized", "triage"] as const;
 type ReportKind = (typeof REPORT_KINDS)[number];
 const REPORT_KIND_SET = new Set<string>(REPORT_KINDS);
+
+const LOOPBACK_BIND_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+function isLoopbackBindHost(host: string): boolean {
+  return LOOPBACK_BIND_HOSTS.has(host.toLowerCase());
+}
+
+function serveDisplayUrl(host: string, port: number, boundUrl: string): string {
+  if (host === "0.0.0.0" || host === "::") {
+    return `http://127.0.0.1:${port}`;
+  }
+  return boundUrl;
+}
+
+function assertServeBindHost(host: string): void {
+  if (host === "0.0.0.0" || host === "::" || isLoopbackBindHost(host)) {
+    return;
+  }
+  throw new Error(
+    `Invalid --host: ${host}. Use a loopback address (127.0.0.1, localhost, ::1), or 0.0.0.0 / :: for container port mapping.`,
+  );
+}
 
 function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
   return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
@@ -211,6 +233,7 @@ async function main(): Promise<void> {
 
   if (command === "serve") {
     let port = 8080;
+    let host = "127.0.0.1";
     for (let i = 1; i < args.length; i += 1) {
       if (args[i] === "--port") {
         const value = args[i + 1];
@@ -226,10 +249,26 @@ async function main(): Promise<void> {
         }
         port = parsed;
         i += 1;
+      } else if (args[i] === "--host") {
+        const value = args[i + 1];
+        if (!value || value.startsWith("-")) {
+          throw new Error("--host requires a hostname or address");
+        }
+        if (/\s/.test(value)) {
+          throw new Error(`Invalid --host: ${value}`);
+        }
+        host = value;
+        i += 1;
       }
     }
-    const started = await startAntibudgetServer({ host: "127.0.0.1", port });
-    console.log(`antibudget UI at ${started.url} (localhost only)`);
+    assertServeBindHost(host);
+    const started = await startAntibudgetServer({ host, port });
+    const displayUrl = serveDisplayUrl(host, started.port, started.url);
+    const localityNote =
+      host === "0.0.0.0" || host === "::"
+        ? " (container listens on all interfaces; use the host-mapped URL above)"
+        : " (localhost only)";
+    console.log(`antibudget UI at ${displayUrl}${localityNote}`);
     console.log("Press Ctrl+C to stop.");
     return;
   }
