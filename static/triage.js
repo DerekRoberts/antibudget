@@ -95,6 +95,16 @@ async function loadTransactions() {
   const tbody = document.getElementById("triage-body");
   if (!tbody) return;
   tbody.replaceChildren();
+  if (data.transactions.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "status";
+    td.textContent =
+      "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
   for (const tx of data.transactions) {
     const tr = document.createElement("tr");
     tr.innerHTML = `

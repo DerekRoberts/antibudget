@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { createApiContext, handleApiRequest } from "./api.js";
 import { resolvePaths } from "./config.js";
-import { countTransactions, openDatabase } from "./db.js";
+import { openDatabase } from "./db.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -94,30 +94,12 @@ function isAllowedRequestHost(req: IncomingMessage): boolean {
   return isLoopbackHost(hostHeaderHostname(hostHeader));
 }
 
-/** Ensures data dirs exist and the SQLite file has ingested data before listening. */
-export async function assertServePrerequisites(home?: string): Promise<void> {
+/** Ensures data dirs exist and opens or creates an empty SQLite database before listening. */
+export async function ensureServePrerequisites(home?: string): Promise<void> {
   const paths = resolvePaths({ home, createDirs: true });
-  let existedBeforeOpen = false;
-  try {
-    await fs.access(paths.dbPath);
-    existedBeforeOpen = true;
-  } catch {
-    existedBeforeOpen = false;
-  }
   const db = openDatabase(paths.dbPath);
-  try {
-    const txCount = countTransactions(db);
-    if (txCount === 0) {
-      const hint = existedBeforeOpen
-        ? `Database at ${paths.dbPath} has no transactions. Run "antibudget ingest" first.`
-        : `No database at ${paths.dbPath}. Run "antibudget ingest" first.`;
-      throw new Error(hint);
-    }
-  } finally {
-    db.close();
-  }
+  db.close();
 }
-
 export function createAntibudgetServer(options: ServeOptions = {}): ServeResult {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8080;
@@ -214,7 +196,7 @@ export function createAntibudgetServer(options: ServeOptions = {}): ServeResult 
 }
 
 export function startAntibudgetServer(options: ServeOptions = {}): Promise<ServeResult> {
-  return assertServePrerequisites(options.home).then(() => {
+  return ensureServePrerequisites(options.home).then(() => {
     const created = createAntibudgetServer(options);
     return new Promise<ServeResult>((resolve, reject) => {
       created.server.once("error", reject);

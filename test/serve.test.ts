@@ -28,14 +28,38 @@ function setupHomeWithoutRules(): ReturnType<typeof resolvePaths> {
   return paths;
 }
 
-test("startAntibudgetServer rejects empty database", async () => {
+test("startAntibudgetServer initializes missing database and starts with empty ledger", async () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-m3-fresh-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  assert.equal(fs.existsSync(paths.dbPath), false);
+  const started = await startAntibudgetServer({ home: paths.home, port: 0 });
+  try {
+    assert.equal(fs.existsSync(paths.dbPath), true);
+    assert.equal(fs.existsSync(paths.inbox), true);
+    const res = await fetch(`${started.url}/api/transactions/uncategorized`);
+    assert.equal(res.status, 200);
+    const data = (await res.json()) as { transactions: unknown[] };
+    assert.deepEqual(data.transactions, []);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      started.server.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
+});
+
+test("startAntibudgetServer starts when database exists but has no transactions", async () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-m3-empty-"));
   const paths = resolvePaths({ home: tmpHome, createDirs: true });
   openDatabase(paths.dbPath).close();
-  await assert.rejects(
-    () => startAntibudgetServer({ home: paths.home, port: 0 }),
-    /ingest/,
-  );
+  const started = await startAntibudgetServer({ home: paths.home, port: 0 });
+  try {
+    const res = await fetch(`${started.url}/triage`);
+    assert.equal(res.status, 200);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      started.server.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
 });
 
 test("startAntibudgetServer binds localhost and serves triage page", async () => {
