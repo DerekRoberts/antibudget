@@ -46,6 +46,15 @@ test("parseOfxContent rejects multiple ACCTID values", () => {
   );
 });
 
+test("ingest rejects missing explicit path", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-ingest-missing-"));
+  const paths = resolvePaths({ home: tmpHome, createDirs: true });
+  assert.throws(
+    () => ingestOfxPaths({ paths, sourcePath: path.join(tmpHome, "no-such.ofx") }),
+    /Ingest path not found/,
+  );
+});
+
 test("ingest is idempotent when the same OFX is processed twice", () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-test-"));
   const paths = resolvePaths({ home: tmpHome, createDirs: true });

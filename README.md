@@ -4,7 +4,7 @@ Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicat
 
 ## Requirements
 
-- **Node.js 22.5+** (uses built-in `node:sqlite` and the native test runner)
+- **Node.js 22.5+** (built-in `node:sqlite` and the native test runner). **Node 25** is what CI runs and what we use for first real-data dry runs.
 - npm
 
 ## Quick start
@@ -17,6 +17,30 @@ npx antibudget ingest   # reads ~/.local/share/antibudget/inbox (or ANTIBUDGET_H
 ```
 
 Copy synthetic exports from `fixtures/` into your inbox for a dry run. **Never commit real `.ofx`, `.qfx`, or `.db` files** — see `.gitignore`.
+
+## First real-data dry run (Node 25)
+
+Use your own OFX/QFX exports locally; keep them out of git.
+
+```bash
+git clone https://github.com/MinionTech/antibudget.git
+cd antibudget
+npm install
+npm run build
+
+export ANTIBUDGET_HOME="$HOME/antibudget-data"   # or your Drive symlink
+mkdir -p "$ANTIBUDGET_HOME/inbox"
+# Copy real exports into inbox/ (not into the repo)
+
+npx antibudget ingest
+npx antibudget categorize --init-rules   # writes rules.yaml from fixtures/rules.example.yaml
+# Edit $ANTIBUDGET_HOME/rules.yaml for your payees, then:
+npx antibudget categorize
+
+npx antibudget serve                     # http://127.0.0.1:8080 (127.0.0.1 only)
+```
+
+If ingest finds no files, it prints where to drop `.ofx`/`.qfx`. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, run `categorize --init-rules` or copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml`.
 
 ### Data directory
 

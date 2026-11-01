@@ -4,8 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { categorizeTransactions } from "./categorize.js";
-import { resolvePaths } from "./config.js";
-import { openDatabase } from "./db.js";
+import { repositoryExampleRulesPath, resolvePaths } from "./config.js";
+import { countTransactions, openDatabase } from "./db.js";
 import { ingestOfxPaths } from "./ingest.js";
 import { setManualTransactionCategory } from "./manual.js";
 import {
@@ -74,6 +74,12 @@ async function main(): Promise<void> {
     const sourcePath = args[1] ? path.resolve(args[1]) : undefined;
     const paths = resolvePaths({ createDirs: true });
     const result = ingestOfxPaths({ paths, sourcePath });
+    if (result.filesProcessed === 0) {
+      const target = sourcePath ?? paths.inbox;
+      console.error(
+        `No .ofx or .qfx files found in ${target}. Drop bank exports there or pass a file path.`,
+      );
+    }
     console.log(
       JSON.stringify(
         {
@@ -95,6 +101,15 @@ async function main(): Promise<void> {
     const initRules = args.includes("--init-rules");
     const paths = resolvePaths({ createDirs: true });
     const result = categorizeTransactions({ paths, createDefaultRules: initRules });
+    if (!initRules && result.rulesLoaded === 0 && !fs.existsSync(paths.rulesPath)) {
+      const example = repositoryExampleRulesPath();
+      const exampleHint = fs.existsSync(example)
+        ? ` Copy ${example} to ${paths.rulesPath}, or run`
+        : " Run";
+      console.error(
+        `No rules.yaml at ${paths.rulesPath}.${exampleHint} "antibudget categorize --init-rules".`,
+      );
+    }
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -117,6 +132,11 @@ async function main(): Promise<void> {
     const paths = resolvePaths({ createDirs: false });
     const db = openDatabase(paths.dbPath);
     try {
+      if (countTransactions(db) === 0) {
+        throw new Error(
+          `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`,
+        );
+      }
       if (kind === "monthly") {
         printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
         return;
