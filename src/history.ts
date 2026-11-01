@@ -11,9 +11,7 @@ import {
   type AntibudgetDb,
   type StoredTransactionRow,
   type TransactionClassification,
-  type TransactionClassificationSnapshot,
   type TransactionKey,
-  listTransactionClassificationSnapshots,
   transactionKeyString,
 } from "./db.js";
 
@@ -125,42 +123,6 @@ function applyCategoryBackward(db: AntibudgetDb, payload: CategoryHistoryPayload
   applyCategoryState(db, payload.accountId, payload.fitid, payload.before);
 }
 
-function classificationsEqual(a: TransactionClassification, b: TransactionClassification): boolean {
-  return (
-    a.categoryId === b.categoryId &&
-    a.isManualOverride === b.isManualOverride &&
-    a.isTransfer === b.isTransfer
-  );
-}
-
-function diffIngestCategoryChanges(
-  before: TransactionClassificationSnapshot[],
-  after: TransactionClassificationSnapshot[],
-  excludeKeys: Set<string>,
-): IngestCategoryChange[] {
-  const afterByKey = new Map(
-    after.map((row) => [transactionKeyString(row.accountId, row.fitid), row.classification]),
-  );
-  const changes: IngestCategoryChange[] = [];
-  for (const row of before) {
-    const key = transactionKeyString(row.accountId, row.fitid);
-    if (excludeKeys.has(key)) {
-      continue;
-    }
-    const next = afterByKey.get(key);
-    if (!next || classificationsEqual(row.classification, next)) {
-      continue;
-    }
-    changes.push({
-      accountId: row.accountId,
-      fitid: row.fitid,
-      before: row.classification,
-      after: next,
-    });
-  }
-  return changes;
-}
-
 function applyIngestCategoryChanges(
   db: AntibudgetDb,
   changes: IngestCategoryChange[],
@@ -168,7 +130,12 @@ function applyIngestCategoryChanges(
 ): void {
   for (const change of changes) {
     const state = direction === "backward" ? change.before : change.after;
-    restoreTransactionClassification(db, change.accountId, change.fitid, state);
+    const updated = restoreTransactionClassification(db, change.accountId, change.fitid, state);
+    if (!updated) {
+      throw new Error(
+        `Transaction not found for ingest history apply: ${change.accountId} / ${change.fitid}`,
+      );
+    }
   }
 }
 
@@ -228,19 +195,14 @@ function eventLabel(kind: HistoryKind, payload: CategoryHistoryPayload | IngestH
   }
   const p = payload as IngestHistoryPayload;
   const n = p.rows.length;
+  const categoryCount = p.categoryChanges?.length ?? 0;
+  if (n === 0 && categoryCount > 0) {
+    return `Re-categorize ${categoryCount} transaction${categoryCount === 1 ? "" : "s"}`;
+  }
   if (n === 0) {
     return "Import balance update";
   }
   return `Import ${n} transaction${n === 1 ? "" : "s"}`;
-}
-
-export function collectIngestCategoryChanges(
-  db: AntibudgetDb,
-  before: TransactionClassificationSnapshot[],
-  excludeKeys: Set<string>,
-): IngestCategoryChange[] {
-  const after = listTransactionClassificationSnapshots(db);
-  return diffIngestCategoryChanges(before, after, excludeKeys);
 }
 
 export function recordCategoryHistory(

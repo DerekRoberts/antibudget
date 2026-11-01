@@ -14,12 +14,14 @@ import {
   loadRules,
   type RulesFile,
 } from "./rules.js";
+import type { IngestCategoryChange } from "./history.js";
 
 export interface CategorizeResult {
   rulesLoaded: number;
   transactionsConsidered: number;
   transactionsUpdated: number;
   defaultRulesCreated: boolean;
+  categoryChanges: IngestCategoryChange[];
 }
 
 export interface CategorizeOptions {
@@ -50,11 +52,13 @@ export function categorizeTransactions(options: CategorizeOptions = {}): Categor
         transactionsConsidered: 0,
         transactionsUpdated: 0,
         defaultRulesCreated,
+        categoryChanges: [],
       };
     }
 
     const transactions = listAllTransactions(db);
     const updates: ApplyCategoryUpdate[] = [];
+    const categoryChanges: IngestCategoryChange[] = [];
 
     for (const tx of transactions) {
       if (tx.isManualOverride) {
@@ -73,6 +77,22 @@ export function categorizeTransactions(options: CategorizeOptions = {}): Categor
       if (tx.categoryId === categoryId && (!needsTransfer || tx.isTransfer)) {
         continue;
       }
+      const before = {
+        categoryId: tx.categoryId,
+        isManualOverride: tx.isManualOverride,
+        isTransfer: tx.isTransfer,
+      };
+      const after = {
+        categoryId,
+        isManualOverride: false,
+        isTransfer: needsTransfer ? true : tx.isTransfer,
+      };
+      categoryChanges.push({
+        accountId: tx.accountId,
+        fitid: tx.fitid,
+        before,
+        after,
+      });
       updates.push({
         accountId: tx.accountId,
         fitid: tx.fitid,
@@ -91,6 +111,7 @@ export function categorizeTransactions(options: CategorizeOptions = {}): Categor
       transactionsConsidered: transactions.length,
       transactionsUpdated,
       defaultRulesCreated,
+      categoryChanges,
     };
   } finally {
     if (ownsDb) {

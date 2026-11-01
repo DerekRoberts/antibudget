@@ -213,5 +213,9 @@ test("undo ingest restores rule categorization on pre-existing transactions", ()
   undoLedgerMutation(db);
   const afterUndo = listAllTransactions(db).find((t) => t.fitid === amazon!.fitid);
   assert.equal(afterUndo?.categoryName, null);
+  const redo = redoLedgerMutation(db);
+  assert.equal(redo.applied, true);
+  const afterRedo = listAllTransactions(db).find((t) => t.fitid === amazon!.fitid);
+  assert.equal(afterRedo?.categoryName, "Shopping");
   db.close();
 });

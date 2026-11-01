@@ -9,7 +9,6 @@ import {
   countTransactions,
   insertTransactionIgnore,
   listAccountBalanceSnapshots,
-  listTransactionClassificationSnapshots,
   loadStoredTransactionRows,
   openDatabase,
   runInTransaction,
@@ -18,7 +17,7 @@ import {
   type AntibudgetDb,
   type TransactionKey,
 } from "./db.js";
-import { collectIngestCategoryChanges, recordIngestHistory } from "./history.js";
+import { recordIngestHistory } from "./history.js";
 import { parseOfxFile, type ParsedOfxStatement } from "./ofx.js";
 import { loadRules, type RulesFile } from "./rules.js";
 
@@ -156,8 +155,7 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
     let ingestError: unknown;
     let historyError: unknown;
     let historyFailed = false;
-    let classificationBefore: ReturnType<typeof listTransactionClassificationSnapshots> | null =
-      null;
+    let ingestCategoryChanges: import("./history.js").IngestCategoryChange[] = [];
 
     try {
       for (const filePath of files) {
@@ -173,10 +171,8 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
       }
 
       if (files.length > 0 && rulesFile) {
-        if (recordHistory) {
-          classificationBefore = listTransactionClassificationSnapshots(db);
-        }
-        categorizeTransactions({ paths, db, rules: rulesFile });
+        const categorized = categorizeTransactions({ paths, db, rules: rulesFile });
+        ingestCategoryChanges = categorized.categoryChanges;
       }
     } catch (error) {
       ingestError = error;
@@ -188,10 +184,9 @@ export function ingestOfxPaths(options: IngestOptions = {}): IngestResult {
           const excludeKeys = new Set(
             insertedKeys.map((key) => transactionKeyString(key.accountId, key.fitid)),
           );
-          const categoryChanges =
-            classificationBefore !== null
-              ? collectIngestCategoryChanges(db, classificationBefore, excludeKeys)
-              : [];
+          const categoryChanges = ingestCategoryChanges.filter(
+            (change) => !excludeKeys.has(transactionKeyString(change.accountId, change.fitid)),
+          );
           runInTransaction(db, () => {
             recordIngestHistory(
               db,
