@@ -52,6 +52,9 @@ export async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   let rejected: ApiError | undefined;
 
   await new Promise<void>((resolve, reject) => {
+    const finish = (): void => {
+      resolve();
+    };
     req.on("data", (chunk: Buffer | string) => {
       if (rejected) {
         return;
@@ -60,11 +63,15 @@ export async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
       total += buf.length;
       if (total > MAX_JSON_BODY_BYTES) {
         rejected = new ApiError(413, "Request body too large");
+        req.removeAllListeners("data");
+        req.on("data", () => {});
+        req.resume();
+        finish();
         return;
       }
       chunks.push(buf);
     });
-    req.on("end", () => resolve());
+    req.on("end", finish);
     req.on("error", (err) => reject(err));
   });
 

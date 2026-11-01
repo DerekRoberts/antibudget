@@ -15,7 +15,11 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+function hostForUrl(host: string): string {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}
 
 export interface ServeOptions {
   host?: string;
@@ -117,13 +121,14 @@ export async function assertServePrerequisites(home?: string): Promise<void> {
 export function createAntibudgetServer(options: ServeOptions = {}): ServeResult {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8080;
+  const urlHost = hostForUrl(host);
   const ctx = createApiContext({ home: options.home });
 
   const server = http.createServer((req, res) => {
     void (async () => {
       let url: URL;
       try {
-        url = new URL(req.url ?? "/", `http://${host}:${port}`);
+        url = new URL(req.url ?? "/", `http://${urlHost}:${port}`);
       } catch {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end("Bad Request");
@@ -204,7 +209,7 @@ export function createAntibudgetServer(options: ServeOptions = {}): ServeResult 
     server,
     host,
     port,
-    url: `http://${host}:${port}`,
+    url: `http://${urlHost}:${port}`,
   };
 }
 
@@ -218,7 +223,7 @@ export function startAntibudgetServer(options: ServeOptions = {}): Promise<Serve
         const addr = created.server.address();
         if (addr && typeof addr === "object") {
           created.port = addr.port;
-          created.url = `http://${created.host}:${created.port}`;
+          created.url = `http://${hostForUrl(created.host)}:${created.port}`;
         }
         resolve(created);
       });
