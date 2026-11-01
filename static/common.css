@@ -194,9 +194,26 @@ th {
   opacity: 1;
 }
 
+.history-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-right: 1rem;
+}
+
+.history-controls button:disabled {
+  opacity: 0.45;
+}
+
+.history-hint {
+  max-width: 28rem;
+}
+
 kbd {
   font: inherit;
   border: 1px solid #8886;
   border-radius: 3px;
   padding: 0 0.25rem;
 }
+

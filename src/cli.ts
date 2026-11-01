@@ -177,7 +177,8 @@ async function main(): Promise<void> {
         `No rules.yaml at ${paths.rulesPath}. From a git checkout, copy fixtures/rules.example.yaml there and edit payees before ingest (ingest auto-categorizes when the file exists). From npm, run "antibudget categorize --init-rules" to write built-in starter rules, then edit before ingest.`,
       );
     }
-    console.log(JSON.stringify(result, null, 2));
+    const { categoryChanges: _categoryChanges, ...summary } = result;
+    console.log(JSON.stringify(summary, null, 2));
     return;
   }
 

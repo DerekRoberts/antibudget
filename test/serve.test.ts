@@ -10,6 +10,7 @@ import {
   handleGetCashflowReport,
   handleGetUncategorized,
   handleSetTransactionCategory,
+  handleUndo,
 } from "../src/api.js";
 import { resolvePaths } from "../src/config.js";
 import { listAllTransactions, listCategories, openDatabase } from "../src/db.js";
@@ -120,6 +121,27 @@ test("uncategorized payee filter matches AMAZON", () => {
   };
   assert.equal(filtered.transactions.length, 1);
   assert.match(filtered.transactions[0].payee ?? "", /AMAZON/i);
+});
+
+test("history API undo after categorize", () => {
+  const paths = setupHomeWithoutRules();
+  const ctx = createApiContext({ home: paths.home });
+  const uncategorized = handleGetUncategorized(ctx, new URLSearchParams()) as {
+    transactions: { acctId: string; fitid: string }[];
+  };
+  const tx = uncategorized.transactions[0];
+  handleSetTransactionCategory(ctx, {
+    acctId: tx.acctId,
+    fitid: tx.fitid,
+    categoryName: "Undo Me",
+  });
+  const undo = handleUndo(ctx) as { applied: boolean; kind: string };
+  assert.equal(undo.applied, true);
+  assert.equal(undo.kind, "category");
+  const db = openDatabase(paths.dbPath);
+  const row = listAllTransactions(db).find((t) => t.fitid === tx.fitid);
+  assert.equal(row?.categoryName, null);
+  db.close();
 });
 
 test("set category on missing transaction does not create category", () => {
