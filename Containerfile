@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:25-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY static ./static
 
 RUN npm run build
 
-FROM node:25-bookworm-slim
+FROM node:26-bookworm-slim
 
 WORKDIR /app
 
