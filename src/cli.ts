@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { categorizeTransactions } from "./categorize.js";
 import { resolvePaths } from "./config.js";
 import { countTransactions, openDatabase } from "./db.js";
-import { ingestOfxPaths } from "./ingest.js";
+import { ingestOfxPaths, resolveIngestUserPath } from "./ingest.js";
 import { setManualTransactionCategory } from "./manual.js";
 import {
   listMultiHitTransactions,
@@ -23,7 +23,7 @@ import { startAntibudgetServer } from "./server.js";
 
 function printUsage(): void {
   console.error(`Usage:
-  antibudget ingest [file-or-directory]
+  antibudget ingest [--recursive] [file-or-directory]
   antibudget categorize [--init-rules]
   antibudget set-category <acct-id> <fitid> <category-name>
   antibudget report monthly [--month YYYY-MM]
@@ -32,9 +32,36 @@ function printUsage(): void {
   antibudget report triage
   antibudget serve [--port PORT]
 
+Ingest reads .ofx/.qfx from ANTIBUDGET_HOME/inbox when no path is given.
+With a directory, only that directory is scanned (not subfolders) unless --recursive.
+Files are archived under ANTIBUDGET_HOME/archive even when ingested from elsewhere.
+
 Environment:
   ANTIBUDGET_HOME   Override data directory (default: OS user data path)
 `);
+}
+
+function parseIngestArgs(args: string[]): { sourcePath?: string; recursive: boolean } {
+  let recursive = false;
+  let rawPath: string | undefined;
+  for (let i = 1; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--recursive" || arg === "-r") {
+      recursive = true;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown ingest option: ${arg}`);
+    }
+    if (rawPath) {
+      throw new Error("ingest accepts at most one path argument");
+    }
+    rawPath = arg;
+  }
+  return {
+    sourcePath: rawPath ? resolveIngestUserPath(rawPath) : undefined,
+    recursive,
+  };
 }
 
 const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -89,13 +116,13 @@ async function main(): Promise<void> {
   }
 
   if (command === "ingest") {
-    const sourcePath = args[1] ? path.resolve(args[1]) : undefined;
+    const { sourcePath, recursive } = parseIngestArgs(args);
     const paths = resolvePaths({ createDirs: true });
-    const result = ingestOfxPaths({ paths, sourcePath });
+    const result = ingestOfxPaths({ paths, sourcePath, recursive });
     if (result.filesProcessed === 0) {
       const target = sourcePath ?? paths.inbox;
       console.error(
-        `No .ofx or .qfx files found in ${target}. Drop bank exports there or pass a file path.`,
+        `No .ofx or .qfx files found in ${target}. Drop bank exports in the inbox, pass a file, or pass a directory (see --help).`,
       );
     }
     console.log(
