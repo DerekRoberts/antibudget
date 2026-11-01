@@ -38,7 +38,9 @@ Environment:
 }
 
 const REPORT_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const REPORT_KINDS = new Set(["monthly", "cashflow", "uncategorized", "triage"]);
+const REPORT_KINDS = ["monthly", "cashflow", "uncategorized", "triage"] as const;
+type ReportKind = (typeof REPORT_KINDS)[number];
+const REPORT_KIND_SET = new Set<string>(REPORT_KINDS);
 
 function noTransactionsGuidance(paths: ReturnType<typeof resolvePaths>): string {
   return `No transactions in ${paths.dbPath}. Run "antibudget ingest" after adding OFX/QFX to ${paths.inbox}.`;
@@ -56,7 +58,9 @@ function assertReportDatabaseReady(paths: ReturnType<typeof resolvePaths>): void
 function parseReportArgs(args: string[]): { kind: string; month?: string } {
   const kind = args[1];
   if (!kind) {
-    throw new Error("report requires a subcommand: monthly, cashflow, uncategorized, triage");
+    throw new Error(
+      `report requires a subcommand: ${REPORT_KINDS.join(", ")}`,
+    );
   }
   let month: string | undefined;
   for (let i = 2; i < args.length; i += 1) {
@@ -143,7 +147,7 @@ async function main(): Promise<void> {
 
   if (command === "report") {
     const { kind, month } = parseReportArgs(args);
-    if (!REPORT_KINDS.has(kind)) {
+    if (!REPORT_KIND_SET.has(kind)) {
       throw new Error(`Unknown report subcommand: ${kind}`);
     }
     const paths = resolvePaths({ createDirs: false });
@@ -153,20 +157,25 @@ async function main(): Promise<void> {
       if (countTransactions(db) === 0) {
         throw new Error(noTransactionsGuidance(paths));
       }
-      if (kind === "monthly") {
-        printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
-        return;
+      const reportKind = kind as ReportKind;
+      switch (reportKind) {
+        case "monthly":
+          printMonthlyCategoryTable(monthlyCategoryRollup(db, month));
+          break;
+        case "cashflow":
+          printCashflowSeries(monthlyIncomeExpenseSeries(db));
+          break;
+        case "uncategorized":
+          printUncategorized(listUncategorizedTransactions(db));
+          break;
+        case "triage":
+          printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
+          break;
+        default: {
+          const _exhaustive: never = reportKind;
+          throw new Error(`Unknown report subcommand: ${_exhaustive}`);
+        }
       }
-      if (kind === "cashflow") {
-        printCashflowSeries(monthlyIncomeExpenseSeries(db));
-        return;
-      }
-      if (kind === "uncategorized") {
-        printUncategorized(listUncategorizedTransactions(db));
-        return;
-      }
-      printMultiHit(listMultiHitTransactions(db, paths.rulesPath));
-      return;
     } finally {
       db.close();
     }

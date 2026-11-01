@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { openDatabase } from "../src/db.js";
 import { resolvePaths } from "../src/config.js";
@@ -12,6 +12,14 @@ import { ingestOfxPaths } from "../src/ingest.js";
 const repoRoot = path.join(import.meta.dirname, "..", "..");
 const cliPath = path.join(repoRoot, "dist", "src", "cli.js");
 const fixturePath = path.join(repoRoot, "fixtures", "sample.ofx");
+
+function mkTempHome(t: TestContext, prefix: string): string {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+  return tmpHome;
+}
 
 function runCli(home: string, args: string[]): { status: number | null; stderr: string } {
   const result = spawnSync(
@@ -26,10 +34,7 @@ function runCli(home: string, args: string[]): { status: number | null; stderr: 
 }
 
 test("report with unknown subcommand errors before empty-db ingest hint", (t) => {
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-cli-report-"));
-  t.after(() => {
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  });
+  const tmpHome = mkTempHome(t, "antibudget-cli-report-");
   const paths = resolvePaths({ home: tmpHome, createDirs: true });
   openDatabase(paths.dbPath).close();
 
@@ -52,10 +57,7 @@ test("report before data directory exists prints ingest guidance", () => {
 });
 
 test("report triage exits successfully when data exists", (t) => {
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-cli-triage-"));
-  t.after(() => {
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  });
+  const tmpHome = mkTempHome(t, "antibudget-cli-triage-");
   const paths = resolvePaths({ home: tmpHome, createDirs: true });
   fs.copyFileSync(fixturePath, path.join(paths.inbox, "sample.ofx"));
   openDatabase(paths.dbPath).close();

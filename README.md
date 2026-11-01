@@ -4,7 +4,7 @@ Local-first personal **cashflow** tracker: drop bank OFX/QFX exports, deduplicat
 
 ## Requirements
 
-- **Node.js 22.5+** (built-in `node:sqlite` and the native test runner). **Node 25** is what CI runs and what we use for first real-data dry runs.
+- **Node.js 22.5+** (built-in `node:sqlite` and the native test runner). CI runs latest **22.x** and **25**; **Node 25** is the primary dry-run target.
 - npm
 
 ## Quick start
