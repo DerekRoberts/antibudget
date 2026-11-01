@@ -28,7 +28,7 @@ npm link
 antibudget ingest
 ```
 
-(`npx antibudget ingest` works too if you prefer not to link.)
+(`npx antibudget` runs the published npm package, not an unlinked git checkout — use `npm link` or `node …/dist/src/cli.js` for local development.)
 
 Copy synthetic exports from `fixtures/` into your inbox for a dry run. **Never commit real `.ofx`, `.qfx`, or `.db` files** — see `.gitignore`.
 
@@ -60,7 +60,7 @@ Ingest all `.ofx`/`.qfx` in a folder (non-recursive; `~` expands to your home di
 node --experimental-sqlite dist/src/cli.js ingest ~/Documents
 ```
 
-Use `--recursive` to include subfolders. Shell-style globs work when the path contains `*`, `?`, or `[` (for example `~/Downloads/*.qfx`).
+Use `--recursive` to include subfolders. Shell-style globs work when the path contains `*`, `?`, or a `[...]` character class — quote the pattern so the shell does not expand it first (for example `'~/Downloads/*.qfx'`).
 
 If ingest finds no files, it prints where to drop exports or which path was scanned. If `serve` runs before ingest, it errors with a clear message. With no `rules.yaml`, copy `fixtures/rules.example.yaml` to `$ANTIBUDGET_HOME/rules.yaml` and edit it before ingest (or run `categorize --init-rules` only on an empty data dir with no transactions yet).
 

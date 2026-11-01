@@ -32,7 +32,6 @@ export interface IngestOptions {
 }
 
 const OFX_EXTENSIONS = new Set([".ofx", ".qfx"]);
-const GLOB_CHARS = /[*?[\{]/;
 
 /** Expands a leading `~` or `~/` to the user home directory. */
 export function expandTilde(input: string): string {
@@ -46,20 +45,43 @@ export function expandTilde(input: string): string {
 }
 
 export function pathContainsGlob(raw: string): boolean {
-  return GLOB_CHARS.test(raw);
+  if (raw.includes("*") || raw.includes("?") || raw.includes("{")) {
+    return true;
+  }
+  const open = raw.indexOf("[");
+  if (open === -1) {
+    return false;
+  }
+  return raw.indexOf("]", open + 1) !== -1;
 }
 
 /** Resolves CLI ingest paths: tilde expansion, then absolute path (non-glob). */
 export function resolveIngestUserPath(raw: string): string {
   const expanded = expandTilde(raw);
-  if (pathContainsGlob(expanded)) {
+  const resolved = path.resolve(expanded);
+  if (pathContainsGlob(expanded) && !fs.existsSync(resolved)) {
     return expanded;
   }
-  return path.resolve(expanded);
+  return resolved;
 }
 
 function isOfxExtension(filePath: string): boolean {
   return OFX_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+function isRegularOfxFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile() && isOfxExtension(filePath);
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? (error as NodeJS.ErrnoException).code
+        : undefined;
+    if (code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export function listOfxFiles(dir: string, options?: { recursive?: boolean }): string[] {
@@ -68,14 +90,14 @@ export function listOfxFiles(dir: string, options?: { recursive?: boolean }): st
   }
   if (options?.recursive) {
     return globSync("**/*", { cwd: dir })
-      .filter((rel) => isOfxExtension(rel))
       .map((rel) => path.join(dir, rel))
+      .filter((filePath) => isRegularOfxFile(filePath))
       .sort();
   }
   return fs
     .readdirSync(dir)
-    .filter((name) => isOfxExtension(name))
     .map((name) => path.join(dir, name))
+    .filter((filePath) => isRegularOfxFile(filePath))
     .sort();
 }
 
@@ -87,7 +109,7 @@ function listOfxFilesFromGlobPattern(pattern: string): string[] {
   const baseDir = path.isAbsolute(expanded) ? undefined : process.cwd();
   return matches
     .map((match) => (baseDir ? path.resolve(baseDir, match) : path.resolve(match)))
-    .filter((filePath) => fs.statSync(filePath).isFile() && isOfxExtension(filePath))
+    .filter((filePath) => isRegularOfxFile(filePath))
     .sort();
 }
 
@@ -140,10 +162,10 @@ function resolveIngestFiles(
   if (!sourcePath) {
     return listOfxFiles(paths.inbox);
   }
-  if (pathContainsGlob(sourcePath)) {
+  const resolved = path.resolve(expandTilde(sourcePath));
+  if (pathContainsGlob(sourcePath) && !fs.existsSync(resolved)) {
     return listOfxFilesFromGlobPattern(sourcePath);
   }
-  const resolved = path.resolve(expandTilde(sourcePath));
   if (!fs.existsSync(resolved)) {
     throw new Error(`Ingest path not found: ${resolved}`);
   }

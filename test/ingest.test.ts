@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { resolvePaths } from "../src/config.js";
 import { countTransactions, openDatabase } from "../src/db.js";
-import { ingestOfxPaths, listOfxFiles, expandTilde, resolveIngestUserPath } from "../src/ingest.js";
+import { ingestOfxPaths, listOfxFiles, expandTilde, resolveIngestUserPath, pathContainsGlob } from "../src/ingest.js";
 import { parseOfxContent, parseOfxFile, ofxAmountToCents } from "../src/ofx.js";
 
 const repoRoot = path.join(import.meta.dirname, "..", "..");
@@ -52,9 +52,37 @@ test("expandTilde maps ~ and ~/ to the user home directory", () => {
   assert.equal(expandTilde("~/Documents"), path.join(home, "Documents"));
 });
 
-test("listOfxFiles ignores non-OFX files and matches extension case", () => {
+test("pathContainsGlob detects wildcards and character classes", () => {
+  assert.equal(pathContainsGlob("~/Downloads/*.qfx"), true);
+  assert.equal(pathContainsGlob("exports[12].ofx"), true);
+});
+
+test("ingest uses existing bracketed filenames as literal paths, not globs", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-ingest-bracket-"));
+  const exportDir = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-bracket-file-"));
+  try {
+    const paths = resolvePaths({ home: tmpHome, createDirs: true });
+    const bracketFile = path.join(exportDir, "Statement [1].ofx");
+    fs.copyFileSync(fixturePath, bracketFile);
+    openDatabase(paths.dbPath).close();
+
+    const result = ingestOfxPaths({
+      paths,
+      sourcePath: resolveIngestUserPath(bracketFile),
+    });
+    assert.equal(result.filesProcessed, 1);
+    assert.equal(fs.existsSync(bracketFile), false);
+    assert.ok(fs.existsSync(path.join(paths.archive, "Statement [1].ofx")));
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(exportDir, { recursive: true, force: true });
+  }
+});
+
+test("listOfxFiles skips directories whose names look like OFX files", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "antibudget-list-ofx-"));
   try {
+    fs.mkdirSync(path.join(dir, "exports.ofx"));
     fs.writeFileSync(path.join(dir, "notes.txt"), "x");
     fs.copyFileSync(fixturePath, path.join(dir, "a.ofx"));
     fs.copyFileSync(fixturePath, path.join(dir, "b.QFX"));
