@@ -68,12 +68,13 @@ async function onCategoryChange(select) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     window.alert(err.error ?? "Update failed");
+    select.value = "";
     return;
   }
-  await loadCategories();
   const row = select.closest("tr");
   row?.remove();
   updateCount();
+  void loadCategories().catch(() => {});
 }
 
 function updateCount() {

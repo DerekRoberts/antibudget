@@ -79,7 +79,9 @@ function renderCashflow(rows) {
   for (const row of rows) {
     const wrap = document.createElement("div");
     wrap.className = "bar-row";
-    wrap.innerHTML = `<span>${row.month}</span>`;
+    const monthLabel = document.createElement("span");
+    monthLabel.textContent = row.month;
+    wrap.appendChild(monthLabel);
     const track = document.createElement("div");
     track.className = "bar-track";
     const incomeBar = document.createElement("div");
@@ -88,8 +90,7 @@ function renderCashflow(rows) {
     incomeBar.title = `Income ${formatCents(row.incomeCents)}`;
     const expenseBar = document.createElement("div");
     expenseBar.className = "bar-fill expense";
-    expenseBar.style.width = `${(Math.abs(row.expenseCents) / maxExpense) * 50}%`;
-    expenseBar.style.marginTop = "2px";
+    expenseBar.style.width = `${(Math.abs(row.expenseCents) / maxExpense) * 100}%`;
     expenseBar.title = `Expenses ${formatCents(row.expenseCents)}`;
     track.appendChild(incomeBar);
     track.appendChild(expenseBar);
@@ -108,11 +109,14 @@ function renderMonthlyTable(rows) {
   tbody.replaceChildren();
   for (const row of rows) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.categoryName ?? "(uncategorized)"}</td>
-      <td class="${amountClass(row.totalCents)}">${formatCents(row.totalCents)}</td>
-      <td>${row.transactionCount}</td>
-    `;
+    const cat = document.createElement("td");
+    cat.textContent = row.categoryName ?? "(uncategorized)";
+    const total = document.createElement("td");
+    total.className = amountClass(row.totalCents);
+    total.textContent = formatCents(row.totalCents);
+    const count = document.createElement("td");
+    count.textContent = String(row.transactionCount);
+    tr.append(cat, total, count);
     tbody.appendChild(tr);
   }
 }
@@ -162,14 +166,17 @@ function renderSankey(rows) {
     svg.appendChild(p);
   }
 
-  const incomeH = Math.min(120, 40 + income / 5000);
-  rect(leftX, top, 36, incomeH, "#0a7a2f");
-  const label = document.createElementNS(ns, "text");
-  label.setAttribute("x", String(leftX));
-  label.setAttribute("y", String(top + incomeH + 14));
-  label.setAttribute("font-size", "11");
-  label.textContent = "Inflow";
-  svg.appendChild(label);
+  const hasIncome = income > 0;
+  const incomeH = hasIncome ? Math.min(120, 40 + income / 5000) : 0;
+  if (hasIncome) {
+    rect(leftX, top, 36, incomeH, "#0a7a2f");
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", String(leftX));
+    label.setAttribute("y", String(top + incomeH + 14));
+    label.setAttribute("font-size", "11");
+    label.textContent = "Inflow";
+    svg.appendChild(label);
+  }
 
   let y = top;
   const step = Math.min(28, Math.max(16, 180 / Math.max(expenses.length, 1)));
@@ -182,11 +189,13 @@ function renderSankey(rows) {
     t.setAttribute("font-size", "10");
     t.textContent = (row.categoryName ?? "?").slice(0, 18);
     svg.appendChild(t);
-    const yMid = y + h / 2;
-    path(
-      `M ${leftX + 36} ${top + incomeH / 2} C ${midX} ${top + incomeH / 2}, ${midX} ${yMid}, ${rightX} ${yMid} L ${rightX} ${y + h} C ${midX} ${y + h}, ${midX} ${top + incomeH / 2}, ${leftX + 36} ${top + incomeH / 2} Z`,
-      0.25,
-    );
+    if (hasIncome) {
+      const yMid = y + h / 2;
+      path(
+        `M ${leftX + 36} ${top + incomeH / 2} C ${midX} ${top + incomeH / 2}, ${midX} ${yMid}, ${rightX} ${yMid} L ${rightX} ${y + h} C ${midX} ${y + h}, ${midX} ${top + incomeH / 2}, ${leftX + 36} ${top + incomeH / 2} Z`,
+        0.25,
+      );
+    }
     y += step;
   }
 }
@@ -209,7 +218,7 @@ async function init() {
     picker.value = cashflow.rows[cashflow.rows.length - 1].month;
   }
   document.getElementById("load-month")?.addEventListener("click", () => {
-    void refreshMonth();
+    refreshMonth().catch((err) => window.alert(String(err)));
   });
   await refreshMonth();
 }

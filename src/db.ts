@@ -228,6 +228,17 @@ export function setTransactionCategoryManual(
   return result.changes > 0;
 }
 
+export function transactionExists(
+  db: AntibudgetDb,
+  accountId: number,
+  fitid: string,
+): boolean {
+  const row = db
+    .prepare("SELECT 1 AS ok FROM transactions WHERE account_id = ? AND fitid = ?")
+    .get(accountId, fitid) as unknown as { ok: number } | undefined;
+  return row !== undefined;
+}
+
 export interface ApplyCategoryUpdate {
   accountId: number;
   fitid: string;

@@ -5,13 +5,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  ApiError,
   createApiContext,
   handleGetCashflowReport,
   handleGetUncategorized,
   handleSetTransactionCategory,
 } from "../src/api.js";
 import { resolvePaths } from "../src/config.js";
-import { listAllTransactions, openDatabase } from "../src/db.js";
+import { listAllTransactions, listCategories, openDatabase } from "../src/db.js";
 import { ingestOfxPaths } from "../src/ingest.js";
 import { startAntibudgetServer } from "../src/server.js";
 
@@ -81,4 +82,23 @@ test("uncategorized payee filter matches AMAZON", () => {
   };
   assert.equal(filtered.transactions.length, 1);
   assert.match(filtered.transactions[0].payee ?? "", /AMAZON/i);
+});
+
+test("set category on missing transaction does not create category", () => {
+  const paths = setupHomeWithoutRules();
+  const ctx = createApiContext({ home: paths.home });
+  try {
+    handleSetTransactionCategory(ctx, {
+      acctId: "checking-synth-001",
+      fitid: "no-such-fitid",
+      categoryName: "Orphan",
+    });
+    assert.fail("expected ApiError");
+  } catch (err) {
+    assert.ok(err instanceof ApiError);
+    assert.equal(err.status, 404);
+  }
+  const db = openDatabase(paths.dbPath);
+  assert.equal(listCategories(db).some((c) => c.name === "Orphan"), false);
+  db.close();
 });

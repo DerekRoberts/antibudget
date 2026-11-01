@@ -35,6 +35,11 @@ export interface MultiHitRow {
   matchingCategories: string[];
 }
 
+function likePatternContains(raw: string): string {
+  const escaped = raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+  return `%${escaped}%`;
+}
+
 export function monthlyCategoryRollup(db: AntibudgetDb, month?: string): MonthlyCategoryRollupRow[] {
   const filter = month
     ? db.prepare(
@@ -94,7 +99,7 @@ export function listUncategorizedTransactions(
 ): UncategorizedRow[] {
   const trimmed = payeeFilter?.trim();
   if (trimmed) {
-    const pattern = `%${trimmed.replace(/[%_]/g, "")}%`;
+    const pattern = likePatternContains(trimmed);
     return db
       .prepare(
         `
@@ -109,8 +114,8 @@ export function listUncategorizedTransactions(
     JOIN accounts a ON a.id = t.account_id
     WHERE t.category_id IS NULL
       AND (
-        t.payee LIKE ? COLLATE NOCASE
-        OR t.memo LIKE ? COLLATE NOCASE
+        t.payee LIKE ? ESCAPE '\\'
+        OR t.memo LIKE ? ESCAPE '\\'
       )
     ORDER BY t.posted_at, t.fitid
   `,

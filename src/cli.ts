@@ -147,10 +147,14 @@ async function main(): Promise<void> {
         if (!value || value.startsWith("-")) {
           throw new Error("--port requires a number");
         }
-        port = Number.parseInt(value, 10);
-        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+        if (!/^\d+$/.test(value)) {
           throw new Error(`Invalid --port: ${value}`);
         }
+        const parsed = Number(value);
+        if (parsed < 1 || parsed > 65535) {
+          throw new Error(`Invalid --port: ${value}`);
+        }
+        port = parsed;
         i += 1;
       }
     }
