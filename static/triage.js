@@ -80,7 +80,8 @@ async function onCategoryChange(select) {
 function updateCount() {
   const tbody = document.getElementById("triage-body");
   const count = document.getElementById("count");
-  const n = tbody?.querySelectorAll("tr").length ?? 0;
+  const n =
+    tbody?.querySelectorAll("tr:not([data-placeholder])").length ?? 0;
   if (count) count.textContent = `${n} uncategorized`;
 }
 
@@ -97,13 +98,17 @@ async function loadTransactions() {
   tbody.replaceChildren();
   if (data.transactions.length === 0) {
     const tr = document.createElement("tr");
+    tr.dataset.placeholder = "true";
     const td = document.createElement("td");
     td.colSpan = 5;
     td.className = "status";
-    td.textContent =
-      "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
+    td.textContent = q
+      ? "No transactions match this payee filter."
+      : "No transactions yet. Drop bank .ofx/.qfx exports in your antibudget inbox, run antibudget ingest, then reload.";
     tr.appendChild(td);
     tbody.appendChild(tr);
+    updateCount();
+    return;
   }
   for (const tx of data.transactions) {
     const tr = document.createElement("tr");

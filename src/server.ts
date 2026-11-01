@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { createApiContext, handleApiRequest } from "./api.js";
 import { resolvePaths } from "./config.js";
-import { openDatabase } from "./db.js";
+import { countTransactions, openDatabase } from "./db.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -94,12 +94,25 @@ function isAllowedRequestHost(req: IncomingMessage): boolean {
   return isLoopbackHost(hostHeaderHostname(hostHeader));
 }
 
+export interface ServePrepareResult {
+  transactionCount: number;
+  inbox: string;
+}
+
 /** Ensures data dirs exist and opens or creates an empty SQLite database before listening. */
-export async function ensureServePrerequisites(home?: string): Promise<void> {
+export async function ensureServePrerequisites(home?: string): Promise<ServePrepareResult> {
   const paths = resolvePaths({ home, createDirs: true });
   const db = openDatabase(paths.dbPath);
-  db.close();
+  try {
+    return {
+      transactionCount: countTransactions(db),
+      inbox: paths.inbox,
+    };
+  } finally {
+    db.close();
+  }
 }
+
 export function createAntibudgetServer(options: ServeOptions = {}): ServeResult {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8080;
@@ -195,20 +208,24 @@ export function createAntibudgetServer(options: ServeOptions = {}): ServeResult 
   };
 }
 
-export function startAntibudgetServer(options: ServeOptions = {}): Promise<ServeResult> {
-  return ensureServePrerequisites(options.home).then(() => {
-    const created = createAntibudgetServer(options);
-    return new Promise<ServeResult>((resolve, reject) => {
-      created.server.once("error", reject);
-      created.server.listen(created.port, created.host, () => {
-        created.server.removeListener("error", reject);
-        const addr = created.server.address();
-        if (addr && typeof addr === "object") {
-          created.port = addr.port;
-          created.url = `http://${hostForUrl(created.host)}:${created.port}`;
-        }
-        resolve(created);
-      });
+export async function startAntibudgetServer(options: ServeOptions = {}): Promise<ServeResult> {
+  const prep = await ensureServePrerequisites(options.home);
+  if (prep.transactionCount === 0) {
+    console.error(
+      `No transactions yet. Drop .ofx/.qfx in ${prep.inbox} and run "antibudget ingest".`,
+    );
+  }
+  const created = createAntibudgetServer(options);
+  return new Promise<ServeResult>((resolve, reject) => {
+    created.server.once("error", reject);
+    created.server.listen(created.port, created.host, () => {
+      created.server.removeListener("error", reject);
+      const addr = created.server.address();
+      if (addr && typeof addr === "object") {
+        created.port = addr.port;
+        created.url = `http://${hostForUrl(created.host)}:${created.port}`;
+      }
+      resolve(created);
     });
   });
 }
